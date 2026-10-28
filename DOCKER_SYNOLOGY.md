@@ -27,7 +27,8 @@
 
 | Настройка | Назначение |
 |---|---|
-| `BIND_ADDRESS` | HTTP bind address и port |
+| `APP_HOST` | HTTP bind address |
+| `APP_PORT` | HTTP port |
 | `RUST_LOG` | Уровень логирования |
 | `HWACCEL_MODE` | `auto`, `vaapi` или `software` |
 | `VAAPI_DEVICE` | Настроенный DRM render node |

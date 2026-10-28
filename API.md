@@ -16,10 +16,12 @@
 - `GET /api/v1/search?q=...&year=...` — нормализованные результаты и статус каждого провайдера.
 - `GET /api/v1/sources/{id}` — сведения об opaque source ID.
 - `POST /api/v1/playback/sessions` — создать сессию; body: `{"source_id":"opaque-id","file_id":null,"preferred_mode":"auto"}`; ответ 202 с `session_id`, `status`, `status_url`.
-- `GET /api/v1/playback/sessions/{id}` — статус: resolving/buffering/ready/playing/failed/stopped.
+- `GET /api/v1/playback/sessions/{id}` — статус: `created`/`resolving`/`buffering`/`ready`/`playing`/`stopping`/`stopped`/`failed`/`expired`.
 - `DELETE /api/v1/playback/sessions/{id}` — отменить задачи, завершить/reap процессы, очистить кэш; повторный DELETE безопасен.
 - `GET /api/v1/playback/sessions/{id}/master.m3u8` — HLS playlist.
 - `GET /api/v1/playback/sessions/{id}/segments/{segment}` — HLS segment, привязанный к сессии.
+
+`preferred_mode` — предпочтительный режим playback (например `auto`); backend может выбрать иной режим по результатам инспекции. `status_url` — URL для polling статуса сессии (совпадает с `GET /api/v1/playback/sessions/{id}`).
 
 ## Search response sketch
 ```json
@@ -28,9 +30,10 @@
     "id": "opaque-result-id",
     "title": "Example title",
     "year": 2020,
-    "provider": "provider-id",
+    "provider_id": "provider-id",
     "size_bytes": 1234567890,
     "seeders": null,
+    "leechers": null,
     "info_hash": null,
     "magnet_available": true,
     "quality": null,
@@ -48,7 +51,7 @@
 Не выдумывать неизвестные поля.
 
 ## Error codes
-`VALIDATION_ERROR`, `NOT_FOUND`, `PROVIDER_TIMEOUT`, `PROVIDER_UNAVAILABLE`, `SOURCE_UNAVAILABLE`, `UNSUPPORTED_MEDIA`, `SESSION_LIMIT_REACHED`, `SESSION_EXPIRED`, `STREAM_START_FAILED`, `INTERNAL_ERROR`.
+`VALIDATION_ERROR`, `NOT_FOUND`, `PROVIDER_TIMEOUT`, `PROVIDER_UNAVAILABLE`, `SOURCE_UNAVAILABLE`, `SOURCE_TIMEOUT`, `BUFFERING_TIMEOUT`, `UNSUPPORTED_MEDIA`, `PROBE_FAILED`, `FFMPEG_FAILED`, `HWACCEL_UNAVAILABLE`, `RESOURCE_LIMIT_EXCEEDED`, `SESSION_LIMIT_REACHED`, `SESSION_EXPIRED`, `CLEANUP_FAILED`, `INTERNAL_ERROR`.
 
 ## Клиентская совместимость
 - Bearer auth; API не зависит от cookies/UA.

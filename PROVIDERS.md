@@ -1,7 +1,7 @@
 # PROVIDERS.md — поисковые провайдеры
 
 ## Модель
-Provider возвращает нормализованный `TorrentResult`: title, provider_id, opaque source_id, optional source_url, optional magnet URI, info_hash, size, seeders/leechers, quality/languages/date при наличии. Не все поля доступны; неизвестное остаётся null.
+Provider возвращает нормализованный `TorrentResult`: id (opaque result id), title, year, provider_id, size_bytes, seeders/leechers, info_hash, magnet_available, quality/languages, source_url при наличии. Не все поля доступны; неизвестное остаётся null. Поле `id` результата передаётся как `source_id` при создании playback-сессии.
 
 ## Первые кандидаты
 - `rutracker`

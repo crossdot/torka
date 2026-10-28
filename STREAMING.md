@@ -462,9 +462,8 @@ ffmpeg \
 
 Примеры возможных endpoint:
 
-- `GET /api/v1/playback/{session_id}/master.m3u8`
-- `GET /api/v1/playback/{session_id}/index.m3u8`
-- `GET /api/v1/playback/{session_id}/segments/{segment_name}`
+- `GET /api/v1/playback/sessions/{id}/master.m3u8`
+- `GET /api/v1/playback/sessions/{id}/segments/{segment}`
 
 Фактические пути должны соответствовать `API.md` и OpenAPI specification. Эти примеры не разрешают создавать конфликтующие определения endpoint.
 
@@ -976,7 +975,7 @@ Stop endpoint должен быть идемпотентным либо имет
 
 ### 13.4. Категории ошибок
 
-Коды ошибок, HTTP status codes и JSON schema должны быть согласованы с `API.md` и OpenAPI specification, а не определяться независимо в этом документе. Ниже — предлагаемые внутренние машинно-читаемые категории; их сопоставление с публичными кодами согласуется отдельно:
+Авторитетный список кодов ошибок, HTTP status codes и JSON schema задаются в `API.md` и OpenAPI specification. Ниже — коды, относящиеся к playback-сессиям:
 
 - `SOURCE_UNAVAILABLE` — источник недоступен или потерян.
 - `SOURCE_TIMEOUT` — превышен таймаут получения данных.
@@ -986,6 +985,7 @@ Stop endpoint должен быть идемпотентным либо имет
 - `FFMPEG_FAILED` — ошибка запуска или выполнения FFmpeg.
 - `HWACCEL_UNAVAILABLE` — требуемая аппаратная операция недоступна.
 - `RESOURCE_LIMIT_EXCEEDED` — исчерпан установленный ресурсный лимит.
+- `SESSION_LIMIT_REACHED` — достигнут лимит активных сессий.
 - `SESSION_EXPIRED` — сессия истекла.
 - `CLEANUP_FAILED` — не удалось завершить необходимую очистку.
 

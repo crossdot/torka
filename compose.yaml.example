@@ -13,6 +13,9 @@ services:
       CACHE_DIR: "/cache"
     volumes:
       - ./cache:/cache
+      # Mount the Intel render node for VA-API hardware acceleration.
+      # Remove this line when hardware acceleration is not used.
+      - /dev/dri:/dev/dri
     security_opt:
       - no-new-privileges:true
     # Configure resource limits in Synology Container Manager if this
