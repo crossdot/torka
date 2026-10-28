@@ -1,0 +1,20 @@
+services:
+  movie-streamer:
+    image: ghcr.io/example/movie-streamer:0.1.0
+    container_name: movie-streamer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      APP_HOST: "0.0.0.0"
+      APP_PORT: "8080"
+      CACHE_DIR: "/cache"
+    volumes:
+      - ./cache:/cache
+    security_opt:
+      - no-new-privileges:true
+    # Configure resource limits in Synology Container Manager if this
+    # Compose version does not support the desired deploy limits.
+    # Do not use privileged mode or mount the Docker socket.

@@ -1,0 +1,25 @@
+{
+  "items": [
+    {
+      "id": "opaque-result-id",
+      "title": "Example title",
+      "year": 2020,
+      "provider": "example-provider",
+      "size_bytes": 1234567890,
+      "seeders": null,
+      "info_hash": null,
+      "magnet_available": true,
+      "quality": null,
+      "languages": [],
+      "source_url": null
+    }
+  ],
+  "providers": [
+    {
+      "id": "example-provider",
+      "status": "ok",
+      "duration_ms": 123,
+      "error_code": null
+    }
+  ]
+}

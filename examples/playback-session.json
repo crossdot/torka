@@ -1,0 +1,7 @@
+{
+  "session_id": "opaque-session-id",
+  "status": "resolving",
+  "status_url": "/api/v1/playback/sessions/opaque-session-id",
+  "playback_url": null,
+  "error": null
+}
