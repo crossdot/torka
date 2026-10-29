@@ -14,12 +14,14 @@ use crate::{
     state::AppState,
 };
 
-/// `/api/v1` scope. Phase 3 adds `/sources/{id}` and `/playback/...`; unknown
-/// paths return the unified JSON 404.
+mod playback;
+
+/// `/api/v1` scope. Unknown paths return the unified JSON 404.
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/search", get(search))
         .route("/diagnostics", get(diagnostics))
+        .merge(playback::router())
         .fallback(not_found)
 }
 
@@ -54,6 +56,11 @@ async fn search(
     let Query(params) = query.map_err(|e| AppError::validation(e.to_string()))?;
     let query = SearchQuery::normalize(params.q, params.year).map_err(AppError::validation)?;
     let response = state.search.search(&query).await;
+    for item in &response.items {
+        if let Some(hash) = &item.info_hash {
+            state.cache.insert(item.id.clone(), hash.clone());
+        }
+    }
     Ok(Json(response))
 }
 
@@ -75,24 +82,38 @@ mod tests {
     use crate::{
         config::Config,
         search::{
-            SearchService,
+            SearchCache, SearchService,
             fake::FakeProvider,
             registry::{AnyProvider, ProviderRegistry},
         },
+        streaming::StreamingManager,
     };
 
-    fn test_state() -> AppState {
+    async fn test_state() -> AppState {
+        let config = Config {
+            cache_dir: "/tmp/torka-test-cache".into(),
+            session_dir: "/tmp/torka-test-sessions".into(),
+            ..Config::default()
+        };
+
         let registry =
             ProviderRegistry::default().with_provider(AnyProvider::Fake(FakeProvider::new("fake")));
         let search = Arc::new(SearchService::new(registry, Duration::from_secs(5), 4));
+        let cache = Arc::new(SearchCache::new(Duration::from_secs(60), 100));
+        let streaming = Arc::new(StreamingManager::new(&config).await.unwrap());
         AppState {
-            config: Config::default(),
+            config,
             search,
+            cache,
+            streaming,
         }
     }
 
     async fn body_json(req: Request<Body>) -> (StatusCode, serde_json::Value) {
-        let resp = crate::api::router(test_state()).oneshot(req).await.unwrap();
+        let resp = crate::api::router(test_state().await)
+            .oneshot(req)
+            .await
+            .unwrap();
         let status = resp.status();
         let bytes = to_bytes(resp.into_body(), 1024 * 1024).await.unwrap();
         (status, serde_json::from_slice(&bytes).unwrap())

@@ -11,9 +11,13 @@ pub trait SeekableStream: AsyncRead + AsyncSeek + Send + Unpin {}
 impl<T: AsyncRead + AsyncSeek + Send + Unpin> SeekableStream for T {}
 
 pub mod ffmpeg;
+pub mod manager;
+pub mod session;
 pub mod source;
 pub mod torrent;
 
 pub use ffmpeg::{FfmpegRunner, HlsConfig};
+pub use manager::StreamingManager;
+pub use session::SessionState;
 pub use source::SourceServer;
 pub use torrent::{TorrentEngine, TorrentFile, TorrentSource};

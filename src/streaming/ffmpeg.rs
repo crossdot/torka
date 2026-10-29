@@ -43,6 +43,8 @@ fn build_args(config: &HlsConfig) -> Vec<String> {
         "2".to_string(),
         "-hls_list_size".to_string(),
         "0".to_string(),
+        "-hls_base_url".to_string(),
+        "segments/".to_string(),
         "-hls_segment_filename".to_string(),
         segments.to_string_lossy().into_owned(),
         playlist.to_string_lossy().into_owned(),

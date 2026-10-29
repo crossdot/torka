@@ -4,8 +4,9 @@ use movie_streamer::{
     api,
     config::Config,
     error::AppError,
-    search::{ProviderRegistry, SearchService},
+    search::{ProviderRegistry, SearchCache, SearchService},
     state::AppState,
+    streaming::StreamingManager,
 };
 
 #[tokio::main]
@@ -35,7 +36,17 @@ async fn main() -> Result<(), AppError> {
         Duration::from_secs(config.search_timeout_secs),
         config.search_max_parallel,
     ));
-    let state = AppState { config, search };
+    let cache = Arc::new(SearchCache::new(
+        Duration::from_secs(config.search_cache_ttl_secs),
+        config.search_cache_max_entries,
+    ));
+    let streaming = Arc::new(StreamingManager::new(&config).await?);
+    let state = AppState {
+        config,
+        search,
+        cache,
+        streaming,
+    };
 
     let app = api::router(state);
 
