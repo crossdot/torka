@@ -55,6 +55,9 @@ pub struct Config {
     pub search_timeout_secs: u64,
     pub search_max_parallel: usize,
     pub provider_fake_enabled: bool,
+    pub provider_rutracker_enabled: bool,
+    pub provider_rutor_enabled: bool,
+    pub provider_rutracker_forum_id: String,
 }
 
 fn env_str(key: &str, default: &str) -> String {
@@ -102,6 +105,9 @@ impl Config {
             search_timeout_secs: env_parse("SEARCH_TIMEOUT_SECS", 8u64)?,
             search_max_parallel: env_parse("SEARCH_MAX_PARALLEL", 4usize)?,
             provider_fake_enabled: env_parse("PROVIDER_FAKE_ENABLED", false)?,
+            provider_rutracker_enabled: env_parse("PROVIDER_RUTRACKER_ENABLED", false)?,
+            provider_rutor_enabled: env_parse("PROVIDER_RUTOR_ENABLED", false)?,
+            provider_rutracker_forum_id: env_str("PROVIDER_RUTRACKER_FORUM_ID", "0"),
         })
     }
 
@@ -133,6 +139,9 @@ impl Default for Config {
             search_timeout_secs: 8,
             search_max_parallel: 4,
             provider_fake_enabled: false,
+            provider_rutracker_enabled: false,
+            provider_rutor_enabled: false,
+            provider_rutracker_forum_id: "0".into(),
         }
     }
 }

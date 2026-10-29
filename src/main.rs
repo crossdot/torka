@@ -26,7 +26,10 @@ async fn main() -> Result<(), AppError> {
         std::process::exit(1);
     });
 
-    let registry = ProviderRegistry::from_config(&config);
+    let registry = ProviderRegistry::from_config(&config).unwrap_or_else(|e| {
+        eprintln!("provider configuration error: {e}");
+        std::process::exit(1);
+    });
     let search = Arc::new(SearchService::new(
         registry,
         Duration::from_secs(config.search_timeout_secs),

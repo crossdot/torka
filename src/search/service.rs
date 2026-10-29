@@ -65,8 +65,13 @@ async fn run_one(
         Ok(Ok(items)) => (items, "ok", None),
         Ok(Err(e)) => {
             let code = e.code();
+            let status = if matches!(&e, ProviderError::Timeout) {
+                "timeout"
+            } else {
+                "error"
+            };
             tracing::warn!(provider = provider.id(), code, error = %e, "provider search failed");
-            (Vec::new(), "error", Some(code))
+            (Vec::new(), status, Some(code))
         }
         Err(_) => (Vec::new(), "timeout", Some(ProviderError::Timeout.code())),
     };
