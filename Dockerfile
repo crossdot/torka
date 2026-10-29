@@ -3,23 +3,21 @@
 # movie-streamer — production image.
 #
 # Decisions follow `adr/ADR-006-synology-docker.md` and `adr/ADR-008-hardware-acceleration.md`:
-#   * three stages: pinned Rust builder, Node SPA build, then `debian:trixie-slim` runtime with FFmpeg/VA-API;
+#   * three stages: Rust builder, Node SPA build, then `debian:trixie-slim` runtime with FFmpeg/VA-API;
 #   * the builder and the runtime are both Debian trixie, so the binary links against the
 #     same glibc the runtime ships (ADR-006 asks for a static musl build; the torrent
 #     engine (`librqbit` -> `openssl-sys`) would require a vendored, perl-built OpenSSL
-#     for musl, so we pin the glibc pair instead and keep the builder pinned by digest);
+#     for musl, so we keep the glibc pair instead);
 #   * primary target is linux/amd64; linux/arm64 is optional and only builds natively
 #     (buildx/QEMU), see the note at the end of the file;
 #   * no secrets are baked into the image — `APP_API_TOKEN` is supplied at runtime.
 #
-# Base image digests come from the multi-arch manifests
-# (`docker buildx imagetools inspect <image>`) and are bumped deliberately.
-# Debian package pins are exact versions available in trixie at the time of writing;
-# refresh them together with the digests (see "Refreshing pins" at the end).
+# Base images use version tags; Debian packages are pinned to the exact trixie
+# versions below.
 
-ARG RUST_IMAGE=rust:1.99.0-slim@sha256:2752b332db73fdbb7dc576f06c82ed1f312005784ef913d7e04a28f5f55dc581
-ARG RUNTIME_IMAGE=debian:trixie-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4
-ARG NODE_IMAGE=node:26-alpine@sha256:c6ad9e9c1d80f6eb607c26b4b0a132ff7a2344fad1c78ea3baa2a7d4c8de6d94
+ARG RUST_IMAGE=rust:1.99.0-slim
+ARG RUNTIME_IMAGE=debian:trixie-slim
+ARG NODE_IMAGE=node:26-alpine
 
 # ---------------------------------------------------------------------------
 # Stage 1: build the Rust crate (release profile, trixie -> glibc matched with runtime).
@@ -63,7 +61,7 @@ RUN find src -type f -exec touch {} + \
 # ---------------------------------------------------------------------------
 # Stage 1.5: build the Vue SPA (Node). Outputs a static bundle at /build/dist.
 # ---------------------------------------------------------------------------
-# Pin the Node image by digest in the same way as the Rust/runtime images.
+# Node image tag is set by NODE_IMAGE above.
 FROM ${NODE_IMAGE} AS frontend
 
 WORKDIR /build
@@ -141,9 +139,7 @@ ENTRYPOINT ["/usr/local/bin/movie-streamer"]
 # linux/arm64: build natively on an arm64 builder (no cross-compilation, e.g.
 # `docker buildx build --platform linux/arm64`), and omit the Intel driver.
 #
-# Refreshing pins:
-#   docker buildx imagetools inspect rust:1.99.0-slim
-#   docker buildx imagetools inspect debian:trixie-slim
+# Refreshing Debian package pins (trixie):
 #   docker run --rm debian:trixie-slim sh -c \
 #     'sed -i "s/^Components: main$/Components: main non-free/" \
 #        /etc/apt/sources.list.d/debian.sources && apt-get update -qq && \
