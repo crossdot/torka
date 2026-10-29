@@ -80,6 +80,7 @@ ARG LIBVA2_VERSION=2.22.0-3
 ARG VAINFO_VERSION=2.22.0+ds1-2
 ARG CURL_VERSION=8.14.1-2+deb13u7
 ARG INTEL_MEDIA_VERSION=25.2.3+ds1-1
+ARG MESA_VA_VERSION=25.0.7-2+deb13u1
 
 ENV APP_HOST=0.0.0.0 \
     APP_PORT=8080 \
@@ -95,7 +96,8 @@ ENV APP_HOST=0.0.0.0 \
 # the VA-API runtime and its diagnostic tool. `curl` exists only for HEALTHCHECK.
 # `ca-certificates` provides the CA store for the torrent engine's HTTPS client and
 # provider fetches (without it reqwest/native-tls cannot build its HTTP client).
-# The Intel media driver lives in `non-free` (x86_64 VA-API).
+# VA-API drivers: Intel iGPU (`intel-media-va-driver-non-free`, in `non-free`) and
+# AMD (`mesa-va-drivers`, radeonsi/VCN) — both for `HWACCEL_MODE=vaapi`.
 RUN sed -i 's/^Components: main$/Components: main non-free non-free-firmware/' \
         /etc/apt/sources.list.d/debian.sources \
  && apt-get update \
@@ -106,6 +108,7 @@ RUN sed -i 's/^Components: main$/Components: main non-free non-free-firmware/' \
         curl="${CURL_VERSION}" \
         ca-certificates \
         intel-media-va-driver-non-free="${INTEL_MEDIA_VERSION}" \
+        mesa-va-drivers="${MESA_VA_VERSION}" \
  && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
 
 # Unprivileged runtime user. `/cache` and `/config` are the only writable data
@@ -135,4 +138,4 @@ ENTRYPOINT ["/usr/local/bin/movie-streamer"]
 #   docker run --rm debian:trixie-slim sh -c \
 #     'sed -i "s/^Components: main$/Components: main non-free/" \
 #        /etc/apt/sources.list.d/debian.sources && apt-get update -qq && \
-#      apt-cache policy ffmpeg libva2 vainfo curl intel-media-va-driver-non-free'
+#      apt-cache policy ffmpeg libva2 vainfo curl intel-media-va-driver-non-free mesa-va-drivers'
