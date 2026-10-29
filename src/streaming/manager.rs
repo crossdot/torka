@@ -201,6 +201,15 @@ impl StreamingManager {
         p.is_file().then_some(p)
     }
 
+    /// Resolve an FFmpeg media playlist filename to its path.
+    pub fn media_file_path(&self, id: &str, name: &str) -> Option<PathBuf> {
+        if !is_safe_media_name(name) {
+            return None;
+        }
+        let p = self.session_dir.join(id).join(name);
+        p.is_file().then_some(p)
+    }
+
     /// Resolve a validated segment filename to its path, or `None` if invalid.
     pub fn segment_path(&self, id: &str, name: &str) -> Option<PathBuf> {
         if !is_safe_segment_name(name) {
@@ -211,11 +220,24 @@ impl StreamingManager {
     }
 }
 
-/// A single path component matching `seg_<digits>.ts` — no traversal.
+/// A single path component matching `seg_<digits>.ts` or `out<digits>.vtt` — no
+/// traversal.
 fn is_safe_segment_name(name: &str) -> bool {
-    let rest = name.strip_prefix("seg_").unwrap_or(name);
-    let digits = rest.strip_suffix(".ts").unwrap_or(rest);
-    !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit())
+    let video = name
+        .strip_prefix("seg_")
+        .and_then(|r| r.strip_suffix(".ts"));
+    let sub = name
+        .strip_prefix("out")
+        .and_then(|r| r.strip_suffix(".vtt"));
+    [video, sub]
+        .into_iter()
+        .flatten()
+        .any(|digits| !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// FFmpeg's media playlists only: `out.m3u8` (video) and `out_vtt.m3u8` (subtitle).
+fn is_safe_media_name(name: &str) -> bool {
+    name == "out.m3u8" || name == "out_vtt.m3u8"
 }
 
 #[cfg(test)]
@@ -226,9 +248,20 @@ mod tests {
     fn segment_name_validation() {
         assert!(is_safe_segment_name("seg_000.ts"));
         assert!(is_safe_segment_name("seg_42.ts"));
+        assert!(is_safe_segment_name("out0.vtt"));
+        assert!(is_safe_segment_name("out60.vtt"));
         assert!(!is_safe_segment_name("../etc/passwd"));
         assert!(!is_safe_segment_name("out.m3u8"));
+        assert!(!is_safe_segment_name("out_vtt.m3u8"));
         assert!(!is_safe_segment_name("seg_.ts"));
         assert!(!is_safe_segment_name("seg_abc.ts"));
+    }
+
+    #[test]
+    fn media_name_validation() {
+        assert!(is_safe_media_name("out.m3u8"));
+        assert!(is_safe_media_name("out_vtt.m3u8"));
+        assert!(!is_safe_media_name("out0.vtt"));
+        assert!(!is_safe_media_name("../etc/passwd"));
     }
 }

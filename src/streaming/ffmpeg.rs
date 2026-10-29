@@ -40,6 +40,8 @@ pub struct HlsConfig {
     pub encode: Encode,
     /// Number of HLS segments to keep (sliding window; older ones deleted).
     pub hls_list_size: usize,
+    /// Whether the source has subtitles: emit WebVTT + a master playlist.
+    pub has_subtitles: bool,
 }
 
 /// Build the FFmpeg argument vector from config. Pure for testability.
@@ -81,9 +83,14 @@ fn build_args(config: &HlsConfig) -> Vec<String> {
     };
     args.extend(codec_args.iter().map(|s| s.to_string()));
 
-    // HLS WebVTT output only accepts the `webvtt` subtitle codec; drop subtitle
-    // streams (subrip/ass/pgs) instead of failing the muxer on them.
-    args.push("-sn".to_string());
+    // Subtitle handling: convert to WebVTT and emit a master playlist when the
+    // source has subtitles; otherwise drop them (HLS WebVTT only accepts webvtt).
+    if config.has_subtitles {
+        args.push("-c:s".to_string());
+        args.push("webvtt".to_string());
+    } else {
+        args.push("-sn".to_string());
+    }
 
     let playlist = config.output_dir.join("out.m3u8");
     let segments = config.output_dir.join("seg_%03d.ts");
@@ -105,11 +112,11 @@ fn build_args(config: &HlsConfig) -> Vec<String> {
             "segments/",
             "-hls_segment_filename",
             &segments_str,
-            &playlist_str,
         ]
         .iter()
         .map(|s| s.to_string()),
     );
+    args.push(playlist_str);
 
     args
 }
@@ -266,6 +273,7 @@ mod tests {
             start_time_secs: None,
             encode,
             hls_list_size: 5,
+            has_subtitles: false,
         }
     }
 

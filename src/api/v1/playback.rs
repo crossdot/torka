@@ -47,6 +47,7 @@ pub fn router() -> Router<AppState> {
         .route("/playback/sessions/{id}/seek", post(seek))
         .route("/playback/sessions/{id}/master.m3u8", get(master_playlist))
         .route("/playback/sessions/{id}/segments/{name}", get(segment))
+        .route("/playback/sessions/{id}/{name}", get(media_file))
 }
 
 async fn create(
@@ -132,13 +133,24 @@ async fn master_playlist(
         None => return Err(AppError::not_found("session not found")),
     }
 
-    let path = state
+    // With subtitles, synthesize a master playlist referencing the video media
+    // playlist and the subtitle rendition (FFmpeg writes its master only at
+    // exit). Otherwise serve the media playlist directly.
+    let bytes: Vec<u8> = if state
         .streaming
-        .playlist_path(&id)
-        .ok_or_else(|| AppError::not_found("playlist not found"))?;
-    let bytes = tokio::fs::read(&path)
-        .await
-        .map_err(|e| AppError::internal(format!("read playlist: {e}")))?;
+        .media_file_path(&id, "out_vtt.m3u8")
+        .is_some()
+    {
+        generate_master().into_bytes()
+    } else {
+        let path = state
+            .streaming
+            .playlist_path(&id)
+            .ok_or_else(|| AppError::not_found("playlist not found"))?;
+        tokio::fs::read(&path)
+            .await
+            .map_err(|e| AppError::internal(format!("read playlist: {e}")))?
+    };
 
     // Backend signal of playback start (STREAMING.md §8: `playing` is a
     // documented backend-observed event, not proof of client decoding).
@@ -164,10 +176,70 @@ async fn segment(
     let bytes = tokio::fs::read(&path)
         .await
         .map_err(|e| AppError::internal(format!("read segment: {e}")))?;
+    let content_type = if name.ends_with(".vtt") {
+        "text/vtt"
+    } else {
+        "video/mp2t"
+    };
     Ok((
         StatusCode::OK,
-        [(header::CONTENT_TYPE, "video/mp2t")],
+        [(header::CONTENT_TYPE, content_type)],
         bytes,
     )
         .into_response())
+}
+
+/// Serve FFmpeg's media playlists (`out.m3u8`, `out_vtt.m3u8`) and WebVTT
+/// subtitle segments (`out<N>.vtt`) referenced by the master playlist.
+async fn media_file(
+    State(state): State<AppState>,
+    Path((id, name)): Path<(String, String)>,
+) -> Result<Response, AppError> {
+    let path = state
+        .streaming
+        .media_file_path(&id, &name)
+        .ok_or_else(|| AppError::not_found("media file not found"))?;
+    state.streaming.touch(&id).await;
+    let bytes = tokio::fs::read(&path)
+        .await
+        .map_err(|e| AppError::internal(format!("read media file: {e}")))?;
+    let content_type = if name.ends_with(".vtt") {
+        "text/vtt"
+    } else {
+        "application/vnd.apple.mpegurl"
+    };
+    Ok((
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, content_type)],
+        bytes,
+    )
+        .into_response())
+}
+
+/// Generate the HLS master (multivariant) playlist for a subtitled session:
+/// a video variant plus a WebVTT subtitle rendition. FFmpeg only writes the
+/// master at exit, so it is synthesized here during streaming.
+fn generate_master() -> String {
+    concat!(
+        "#EXTM3U\n",
+        "#EXT-X-VERSION:6\n",
+        "#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\",NAME=\"Subtitles\",DEFAULT=YES,AUTOSELECT=YES,URI=\"out_vtt.m3u8\"\n",
+        "#EXT-X-STREAM-INF:BANDWIDTH=800000,SUBTITLES=\"subs\"\n",
+        "out.m3u8\n",
+    )
+    .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::generate_master;
+
+    #[test]
+    fn master_links_video_and_subtitles() {
+        let m = generate_master();
+        assert!(m.contains("#EXT-X-MEDIA:TYPE=SUBTITLES"));
+        assert!(m.contains("URI=\"out_vtt.m3u8\""));
+        assert!(m.contains("SUBTITLES=\"subs\""));
+        assert!(m.ends_with("out.m3u8\n"));
+    }
 }

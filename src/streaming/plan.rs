@@ -64,6 +64,7 @@ mod tests {
             video_codec: Some(video.to_string()),
             audio_codec: Some(audio.to_string()),
             duration_secs: None,
+            has_subtitles: false,
         }
     }
 

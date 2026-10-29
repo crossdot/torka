@@ -278,6 +278,7 @@ async fn orchestrate(
         start_time_secs: None,
         encode,
         hls_list_size: env.hls_list_size,
+        has_subtitles: info.has_subtitles,
     };
     let mut ff = FfmpegRunner::start(&cfg)?;
 

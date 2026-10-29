@@ -15,6 +15,8 @@ pub struct StreamInfo {
     /// Total media duration in seconds (from the container `format`), when
     /// ffprobe can determine it.
     pub duration_secs: Option<f64>,
+    /// Whether the source has a subtitle stream.
+    pub has_subtitles: bool,
 }
 
 #[derive(Deserialize)]
@@ -87,10 +89,16 @@ fn parse_streams(json: &[u8]) -> Result<StreamInfo, AppError> {
         .and_then(|f| f.duration.as_deref())
         .and_then(|d| d.parse::<f64>().ok());
 
+    let has_subtitles = parsed
+        .streams
+        .iter()
+        .any(|s| s.codec_type.as_deref() == Some("subtitle"));
+
     Ok(StreamInfo {
         video_codec: find("video"),
         audio_codec: find("audio"),
         duration_secs,
+        has_subtitles,
     })
 }
 
