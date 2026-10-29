@@ -29,6 +29,7 @@ pub enum Encode {
     Nvenc,
 }
 
+#[derive(Clone)]
 pub struct HlsConfig {
     pub ffmpeg_path: String,
     /// Loopback source URL (seekable HTTP range) supplied by the source server.

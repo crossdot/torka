@@ -155,6 +155,13 @@ impl StreamingManager {
         }
     }
 
+    /// Request a seek to `position_secs` (restarts the pipeline at that position).
+    pub async fn seek(&self, id: &str, position_secs: f64) {
+        if let Some(session) = self.sessions.lock().await.get(id).cloned() {
+            session.seek(position_secs);
+        }
+    }
+
     pub fn playlist_path(&self, id: &str) -> Option<PathBuf> {
         let dir = self.session_dir.join(id);
         let p = dir.join("out.m3u8");

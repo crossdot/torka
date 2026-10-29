@@ -73,7 +73,7 @@ cd frontend && npm install && npm run dev
 
 ## Статус
 
-Реализовано (Phases 0–7 + закрытые зазоры): поиск, провайдеры, streaming, playback API,
-плеер, аутентификация, idle-timeout, graceful shutdown, Docker-образ. Известные
-ограничения: транскод (`preferred_mode`) не реализован (только remux), `arm64` и
-реальный VA-API требуют проверки на железе.
+Реализовано (Phases 0–9 + закрытые зазоры): поиск, провайдеры, streaming (remux +
+транскод + seek), playback API, плеер, аутентификация, idle-timeout, graceful
+shutdown, Docker-образ + CI. Известные ограничения: `arm64` и реальный VA-API
+требуют проверки на железе.

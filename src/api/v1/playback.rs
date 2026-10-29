@@ -42,6 +42,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/playback/sessions", post(create))
         .route("/playback/sessions/{id}", get(status).delete(stop))
+        .route("/playback/sessions/{id}/seek", post(seek))
         .route("/playback/sessions/{id}/master.m3u8", get(master_playlist))
         .route("/playback/sessions/{id}/segments/{name}", get(segment))
 }
@@ -93,6 +94,29 @@ async fn status(
 async fn stop(State(state): State<AppState>, Path(id): Path<String>) -> StatusCode {
     state.streaming.stop(&id).await;
     StatusCode::ACCEPTED
+}
+
+#[derive(Deserialize)]
+struct SeekRequest {
+    position_secs: f64,
+}
+
+/// Seek the session: restart the pipeline at `position_secs` (new generation).
+async fn seek(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(req): Json<SeekRequest>,
+) -> ApiResult<StatusCode> {
+    if !req.position_secs.is_finite() || req.position_secs < 0.0 {
+        return Err(AppError::validation("invalid position_secs"));
+    }
+    match state.streaming.status(&id).await {
+        Some(SessionState::Ready) | Some(SessionState::Playing) => {}
+        Some(_) => return Err(AppError::validation("session not ready")),
+        None => return Err(AppError::not_found("session not found")),
+    }
+    state.streaming.seek(&id, req.position_secs).await;
+    Ok(StatusCode::ACCEPTED)
 }
 
 async fn master_playlist(

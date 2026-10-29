@@ -8,7 +8,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, watch};
 use tokio_util::sync::CancellationToken;
 
 use crate::{config::HwAccelBackend, error::AppError};
@@ -60,16 +60,21 @@ pub struct PlaybackSession {
     state: Arc<Mutex<SessionState>>,
     cancel: CancellationToken,
     last_activity: Arc<Mutex<Instant>>,
+    seek_tx: watch::Sender<Option<f64>>,
+    seek_rx: watch::Receiver<Option<f64>>,
 }
 
 impl PlaybackSession {
     pub fn new(id: String, dir: PathBuf) -> Self {
+        let (seek_tx, seek_rx) = watch::channel(None);
         Self {
             id,
             dir,
             state: Arc::new(Mutex::new(SessionState::Created)),
             cancel: CancellationToken::new(),
             last_activity: Arc::new(Mutex::new(Instant::now())),
+            seek_tx,
+            seek_rx,
         }
     }
 
@@ -104,6 +109,12 @@ impl PlaybackSession {
     /// state. Idempotent.
     pub fn cancel(&self) {
         self.cancel.cancel();
+    }
+
+    /// Request a seek to `position_secs`: the serve loop restarts FFmpeg with
+    /// `-ss` at that position (a new generation).
+    pub fn seek(&self, position_secs: f64) {
+        let _ = self.seek_tx.send(Some(position_secs));
     }
 }
 
@@ -228,30 +239,77 @@ async fn orchestrate(
     ready?;
     session.set_state(SessionState::Ready).await;
 
-    // Stay ready until stopped or idle-expired.
-    let end = wait_for_stop_or_idle(session, env.idle_timeout).await;
+    // Serve: stop, idle expiry, or seek (restart FFmpeg at a new position).
+    let end = serve(session, &mut ff, &cfg, env).await?;
     ff.stop().await;
     Ok(end)
 }
 
-/// Wait for stop (cancel) or idle expiry, whichever comes first.
-async fn wait_for_stop_or_idle(
-    session: &Arc<PlaybackSession>,
-    idle_timeout: Option<Duration>,
-) -> SessionEnd {
-    let Some(timeout) = idle_timeout else {
-        session.cancel.cancelled().await;
-        return SessionEnd::Stopped;
-    };
+/// One event the serve loop reacts to.
+#[derive(Debug)]
+enum Event {
+    Stop,
+    Seek(f64),
+    IdleTick,
+}
 
-    let check = Duration::from_secs(5).min(timeout);
-    loop {
-        tokio::select! {
-            _ = session.cancel.cancelled() => return SessionEnd::Stopped,
-            _ = tokio::time::sleep(check) => {
-                if session.idle_elapsed().await >= timeout {
-                    return SessionEnd::Expired;
+/// Wait for stop, seek, or an idle tick. Testable without FFmpeg.
+async fn wait_event(
+    cancel: &CancellationToken,
+    seek_rx: &mut watch::Receiver<Option<f64>>,
+    idle_check: Duration,
+) -> Event {
+    tokio::select! {
+        _ = cancel.cancelled() => Event::Stop,
+        changed = seek_rx.changed() => {
+            if changed.is_ok() {
+                if let Some(pos) = *seek_rx.borrow() {
+                    Event::Seek(pos)
+                } else {
+                    Event::IdleTick
                 }
+            } else {
+                Event::IdleTick
+            }
+        }
+        _ = tokio::time::sleep(idle_check) => Event::IdleTick,
+    }
+}
+
+/// Serve the ready session: handle stop, idle expiry, and seek (restart the
+/// pipeline with `-ss` at the requested position).
+async fn serve(
+    session: &Arc<PlaybackSession>,
+    ff: &mut FfmpegRunner,
+    base_cfg: &HlsConfig,
+    env: &SessionEnv,
+) -> Result<SessionEnd, AppError> {
+    let mut seek_rx = session.seek_rx.clone();
+    let idle_check = env
+        .idle_timeout
+        .map(|t| Duration::from_secs(5).min(t))
+        .unwrap_or(Duration::from_secs(3600));
+
+    loop {
+        match wait_event(&session.cancel, &mut seek_rx, idle_check).await {
+            Event::Stop => return Ok(SessionEnd::Stopped),
+            Event::IdleTick => {
+                if let Some(timeout) = env.idle_timeout {
+                    if session.idle_elapsed().await >= timeout {
+                        return Ok(SessionEnd::Expired);
+                    }
+                }
+            }
+            Event::Seek(pos) => {
+                ff.stop().await;
+                let cfg = HlsConfig {
+                    start_time_secs: Some(pos),
+                    ..base_cfg.clone()
+                };
+                *ff = FfmpegRunner::start(&cfg)?;
+                ff.wait_ready(env.ready_timeout).await?;
+                session.touch().await;
+                tracing::info!(session = %session.id, position = pos, "seek restarted pipeline");
             }
         }
     }
@@ -295,21 +353,31 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn idle_timeout_expires_session() {
-        let session = Arc::new(PlaybackSession::new("x".into(), "/tmp/x".into()));
-        let end = wait_for_stop_or_idle(&session, Some(Duration::from_millis(50))).await;
-        assert!(matches!(end, SessionEnd::Expired));
+    async fn wait_event_seek() {
+        let (tx, mut rx) = watch::channel(None);
+        tx.send(Some(5.0)).unwrap();
+        let cancel = CancellationToken::new();
+        let event = wait_event(&cancel, &mut rx, Duration::from_secs(60)).await;
+        match event {
+            Event::Seek(pos) => assert_eq!(pos, 5.0),
+            other => panic!("expected Seek, got {other:?}"),
+        }
     }
 
     #[tokio::test]
-    async fn cancel_stops_before_idle_expiry() {
-        let session = Arc::new(PlaybackSession::new("x".into(), "/tmp/x".into()));
-        let s2 = session.clone();
-        tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_millis(20)).await;
-            s2.cancel();
-        });
-        let end = wait_for_stop_or_idle(&session, Some(Duration::from_secs(60))).await;
-        assert!(matches!(end, SessionEnd::Stopped));
+    async fn wait_event_stop() {
+        let (_tx, mut rx) = watch::channel(None);
+        let cancel = CancellationToken::new();
+        cancel.cancel();
+        let event = wait_event(&cancel, &mut rx, Duration::from_secs(60)).await;
+        assert!(matches!(event, Event::Stop));
+    }
+
+    #[tokio::test]
+    async fn wait_event_idle_tick() {
+        let (_tx, mut rx) = watch::channel(None);
+        let cancel = CancellationToken::new();
+        let event = wait_event(&cancel, &mut rx, Duration::from_millis(20)).await;
+        assert!(matches!(event, Event::IdleTick));
     }
 }

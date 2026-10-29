@@ -303,6 +303,37 @@ paths:
           $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalError"
+  /api/v1/playback/sessions/{id}/seek:
+    post:
+      tags: [Playback]
+      operationId: seekPlaybackSession
+      summary: Seek the session to a new position.
+      description: |
+        Restarts the HLS pipeline at `position_secs` (a new generation).
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [position_secs]
+              properties:
+                position_secs:
+                  type: number
+                  minimum: 0
+      responses:
+        "202":
+          description: Seek accepted.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
 components:
   securitySchemes:
     bearerAuth:

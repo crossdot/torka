@@ -2,7 +2,7 @@
 
 use axum::{
     Json, Router,
-    extract::{Query, State, rejection::QueryRejection},
+    extract::{Path, Query, State, rejection::QueryRejection},
     routing::get,
 };
 
@@ -20,9 +20,31 @@ mod playback;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/search", get(search))
+        .route("/sources/{id}", get(source))
         .route("/diagnostics", get(diagnostics))
         .merge(playback::router())
         .fallback(not_found)
+}
+
+#[derive(Serialize)]
+struct SourceDetails {
+    source_id: String,
+    info_hash: String,
+}
+
+/// Details for an opaque source ID (validates it is still cached).
+async fn source(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> ApiResult<Json<SourceDetails>> {
+    let info_hash = state
+        .cache
+        .get(&id)
+        .ok_or_else(|| AppError::not_found("source not found"))?;
+    Ok(Json(SourceDetails {
+        source_id: id,
+        info_hash,
+    }))
 }
 
 #[derive(Serialize)]
@@ -196,5 +218,37 @@ mod tests {
             .unwrap();
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn sources_returns_cached_info_hash() {
+        let app = crate::api::router(test_state().await);
+
+        // search populates the source cache
+        let req = Request::builder()
+            .uri("/api/v1/search?q=matrix")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // known source -> 200 with info_hash
+        let req = Request::builder()
+            .uri("/api/v1/sources/fake-1")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let bytes = to_bytes(resp.into_body(), 1024 * 1024).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(v["info_hash"], "0123456789abcdef0123456789abcdef01234567");
+
+        // unknown source -> 404
+        let req = Request::builder()
+            .uri("/api/v1/sources/unknown")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
     }
 }

@@ -91,6 +91,5 @@ docker exec <container> vainfo --display drm --device /dev/dri/renderD128
 ## Известные ограничения
 
 - `arm64` (отдельный `Dockerfile.arm64`) и реальный VA-API требуют проверки на конкретном железе.
-- Транскодинг (`preferred_mode`) ещё не реализован — сейчас remux/stream-copy.
 - Принудительный вынос наружу (`APP_HOST=0.0.0.0`) — для удалённого доступа ставьте
   VPN или reverse proxy с TLS/auth впереди.
