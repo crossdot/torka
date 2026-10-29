@@ -28,9 +28,9 @@ const playing = ref(false);
 const seekBase = ref(0);
 
 const absolutePosition = computed(() => seekBase.value + currentTime.value);
-/** Seekbar value, decoupled from `absolutePosition` so playback updates don't
- *  yank the slider while the user is dragging it. */
-const sliderValue = ref(0);
+/** Seekbar element (uncontrolled: its value is set imperatively on timeupdate,
+ *  so a reactive binding doesn't fight the user's drag). */
+const seekbar = ref<HTMLInputElement | null>(null);
 
 let sessionId: string | null = null;
 let hls: Hls | null = null;
@@ -95,12 +95,8 @@ async function seekRemote(positionSecs: number): Promise<void> {
   setupHls(playlistUrl(sessionId));
 }
 
-function onSeekInput(e: Event): void {
+function onSeekInput(): void {
   dragging = true;
-  const target = parseFloat((e.target as HTMLInputElement).value);
-  if (Number.isFinite(target)) {
-    sliderValue.value = target;
-  }
 }
 
 function onSeekChange(e: Event): void {
@@ -123,8 +119,8 @@ function onTimeUpdate(): void {
   const el = video.value;
   if (el !== null) {
     currentTime.value = el.currentTime;
-    if (!dragging) {
-      sliderValue.value = absolutePosition.value;
+    if (!dragging && seekbar.value !== null) {
+      seekbar.value.value = String(absolutePosition.value);
     }
   }
 }
@@ -262,11 +258,11 @@ onBeforeUnmount(() => {
           {{ playing ? '⏸' : '▶' }}
         </button>
         <input
+          ref="seekbar"
           class="controls__seek"
           type="range"
           :min="0"
           :max="durationSecs ?? 0"
-          :value="sliderValue"
           step="1"
           aria-label="Позиция"
           @input="onSeekInput"

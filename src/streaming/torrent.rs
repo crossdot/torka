@@ -139,4 +139,14 @@ impl TorrentEngine {
             .map_err(|e| AppError::internal(format!("open stream: {e}")))?;
         Ok(Box::new(stream))
     }
+
+    /// Remove a torrent from the shared session. Called on session end so a
+    /// later reopen of the same source starts fresh (the in-memory storage is
+    /// otherwise reused with evicted pieces).
+    pub async fn delete(&self, handle: &Arc<ManagedTorrent>) -> Result<(), AppError> {
+        self.session
+            .delete(librqbit::api::TorrentIdOrHash::Id(handle.id()), false)
+            .await
+            .map_err(|e| AppError::internal(format!("delete torrent: {e}")))
+    }
 }

@@ -11,6 +11,8 @@ use std::{
 use tokio::sync::{Mutex, Notify, watch};
 use tokio_util::sync::CancellationToken;
 
+use librqbit::ManagedTorrent;
+
 use crate::{config::HwAccelBackend, error::AppError};
 
 use super::{
@@ -68,6 +70,9 @@ pub struct PlaybackSession {
     /// Signalled once the serve loop has restarted the pipeline after a seek
     /// (first segment ready), so `manager::seek` can be synchronous.
     pub(crate) seek_done: Arc<Notify>,
+    /// Resolved torrent handle, removed from the engine on session end so a
+    /// later reopen starts fresh (in-memory storage is otherwise stale).
+    torrent: Arc<Mutex<Option<Arc<ManagedTorrent>>>>,
 }
 
 impl PlaybackSession {
@@ -84,6 +89,7 @@ impl PlaybackSession {
             error: Arc::new(Mutex::new(None)),
             duration_secs: Arc::new(Mutex::new(None)),
             seek_done: Arc::new(Notify::new()),
+            torrent: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -143,6 +149,15 @@ impl PlaybackSession {
     pub async fn duration(&self) -> Option<f64> {
         *self.duration_secs.lock().await
     }
+
+    /// Store the resolved torrent handle for cleanup on session end.
+    pub async fn set_torrent(&self, handle: Arc<ManagedTorrent>) {
+        *self.torrent.lock().await = Some(handle);
+    }
+
+    pub async fn take_torrent(&self) -> Option<Arc<ManagedTorrent>> {
+        self.torrent.lock().await.take()
+    }
 }
 
 /// Shared services a session task uses.
@@ -193,6 +208,9 @@ pub async fn run_session(
         env.source.unregister(&t);
     }
     let _ = tokio::fs::remove_dir_all(&session.dir).await;
+    if let Some(handle) = session.take_torrent().await {
+        let _ = env.engine.delete(&handle).await;
+    }
 
     let final_state = match result {
         Ok(SessionEnd::Stopped) => SessionState::Stopped,
@@ -227,6 +245,8 @@ async fn orchestrate(
         }
         _ = session.cancel.cancelled() => return Ok(SessionEnd::Stopped),
     };
+
+    session.set_torrent(handle.clone()).await;
 
     let files = env.engine.files(&handle).await?;
     let file_id = select_file(file_id, &files)?;
