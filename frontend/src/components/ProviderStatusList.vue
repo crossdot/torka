@@ -23,7 +23,9 @@ function isFailed(provider: ProviderStatus): boolean {
         <span v-if="typeof provider.duration_ms === 'number'" class="providers__duration">
           {{ provider.duration_ms }} мс
         </span>
-        <code v-if="provider.error_code !== null" class="providers__error">{{ provider.error_code }}</code>
+        <code v-if="provider.error_code !== null" class="providers__error">{{
+          provider.error_code
+        }}</code>
       </li>
     </ul>
   </section>

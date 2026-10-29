@@ -91,10 +91,7 @@ export async function requestJson<T>(url: string, options: RequestOptions = {}):
 
   if (options.auth !== false) {
     if (API_TOKEN.length === 0) {
-      throw new ApiError(
-        'CLIENT_MISSING_TOKEN',
-        'API-токен не настроен: задайте VITE_API_TOKEN.',
-      );
+      throw new ApiError('CLIENT_MISSING_TOKEN', 'API-токен не настроен: задайте VITE_API_TOKEN.');
     }
     headers.set('Authorization', `Bearer ${API_TOKEN}`);
   }

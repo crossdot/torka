@@ -58,7 +58,9 @@ function onSubmit(): void {
       </div>
 
       <div class="field field--year">
-        <label class="field__label" for="search-year">Год <span class="field__hint">(необязательно)</span></label>
+        <label class="field__label" for="search-year"
+          >Год <span class="field__hint">(необязательно)</span></label
+        >
         <input
           id="search-year"
           v-model="yearText"

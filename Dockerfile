@@ -3,7 +3,7 @@
 # movie-streamer — production image.
 #
 # Decisions follow `adr/ADR-006-synology-docker.md` and `adr/ADR-008-hardware-acceleration.md`:
-#   * two stages: pinned Rust builder, then `debian:trixie-slim` runtime with FFmpeg/VA-API;
+#   * three stages: pinned Rust builder, Node SPA build, then `debian:trixie-slim` runtime with FFmpeg/VA-API;
 #   * the builder and the runtime are both Debian trixie, so the binary links against the
 #     same glibc the runtime ships (ADR-006 asks for a static musl build; the torrent
 #     engine (`librqbit` -> `openssl-sys`) would require a vendored, perl-built OpenSSL
@@ -19,6 +19,7 @@
 
 ARG RUST_IMAGE=rust:1.99.0-slim@sha256:2752b332db73fdbb7dc576f06c82ed1f312005784ef913d7e04a28f5f55dc581
 ARG RUNTIME_IMAGE=debian:trixie-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4
+ARG NODE_IMAGE=node:26-alpine
 
 # ---------------------------------------------------------------------------
 # Stage 1: build the Rust crate (release profile, trixie -> glibc matched with runtime).
@@ -60,6 +61,18 @@ RUN find src -type f -exec touch {} + \
  && install -D -m 0755 target/release/movie-streamer /out/movie-streamer
 
 # ---------------------------------------------------------------------------
+# Stage 1.5: build the Vue SPA (Node). Outputs a static bundle at /build/dist.
+# ---------------------------------------------------------------------------
+# Pin the Node image by digest in the same way as the Rust/runtime images.
+FROM ${NODE_IMAGE} AS frontend
+
+WORKDIR /build
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY frontend/ ./
+RUN npm run build
+
+# ---------------------------------------------------------------------------
 # Stage 2: runtime.
 # ---------------------------------------------------------------------------
 FROM ${RUNTIME_IMAGE} AS runtime
@@ -75,6 +88,7 @@ ENV APP_HOST=0.0.0.0 \
     APP_PORT=8080 \
     CACHE_DIR=/cache \
     SESSION_DIR=/cache/sessions \
+    STATIC_DIR=/app/dist \
     RUST_LOG=info \
     FFMPEG_PATH=ffmpeg \
     FFPROBE_PATH=ffprobe
@@ -106,6 +120,7 @@ RUN groupadd --system --gid 10001 app \
  && install -d -o app -g app -m 0750 /app /cache /cache/sessions /config
 
 COPY --from=builder /out/movie-streamer /usr/local/bin/movie-streamer
+COPY --from=frontend --chown=app:app /build/dist /app/dist
 
 WORKDIR /app
 USER app

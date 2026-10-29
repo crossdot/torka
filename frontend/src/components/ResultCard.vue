@@ -35,8 +35,12 @@ const languages = computed(() => {
   return Array.isArray(value) && value.length > 0 ? value.join(', ') : null;
 });
 
-const seeders = computed(() => (typeof props.item.seeders === 'number' ? props.item.seeders : null));
-const leechers = computed(() => (typeof props.item.leechers === 'number' ? props.item.leechers : null));
+const seeders = computed(() =>
+  typeof props.item.seeders === 'number' ? props.item.seeders : null,
+);
+const leechers = computed(() =>
+  typeof props.item.leechers === 'number' ? props.item.leechers : null,
+);
 </script>
 
 <template>
@@ -46,7 +50,9 @@ const leechers = computed(() => (typeof props.item.leechers === 'number' ? props
       <p class="card__facts">
         <span v-if="year !== null">{{ year }}</span>
         <span v-if="size !== null">{{ size }}</span>
-        <span class="card__provider" :title="`Провайдер: ${item.provider_id}`">{{ item.provider_id }}</span>
+        <span class="card__provider" :title="`Провайдер: ${item.provider_id}`">{{
+          item.provider_id
+        }}</span>
       </p>
     </header>
 
@@ -67,14 +73,7 @@ const leechers = computed(() => (typeof props.item.leechers === 'number' ? props
     </p>
 
     <footer class="card__footer">
-      <button
-        class="button"
-        type="button"
-        disabled
-        :aria-describedby="hintId"
-      >
-        Выбрать
-      </button>
+      <button class="button" type="button" disabled :aria-describedby="hintId">Выбрать</button>
       <span :id="hintId" class="card__hint">Выбор источника появится вместе с playback API.</span>
     </footer>
   </article>

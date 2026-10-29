@@ -23,9 +23,9 @@ describe('parseErrorPayload', () => {
   });
 
   it('accepts a flat code/message payload', () => {
-    expect(parseErrorPayload({ code: 'NOT_FOUND', message: 'missing', request_id: 'req-2' })).toEqual(
-      { code: 'NOT_FOUND', message: 'missing', request_id: 'req-2' },
-    );
+    expect(
+      parseErrorPayload({ code: 'NOT_FOUND', message: 'missing', request_id: 'req-2' }),
+    ).toEqual({ code: 'NOT_FOUND', message: 'missing', request_id: 'req-2' });
   });
 
   it('rejects bodies without a code and message', () => {
@@ -37,8 +37,8 @@ describe('parseErrorPayload', () => {
 
 describe('requestJson', () => {
   it('encodes query parameters and drops empty filters', async () => {
-    const fetchMock = vi.fn(
-      async (_input: RequestInfo | URL, _init?: RequestInit) => jsonResponse({ items: [], providers: [] }),
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      jsonResponse({ items: [], providers: [] }),
     );
     vi.stubGlobal('fetch', fetchMock);
 
@@ -54,7 +54,10 @@ describe('requestJson', () => {
   });
 
   it('returns parsed JSON on success', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ status: 'ok', version: '0.1.0' })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse({ status: 'ok', version: '0.1.0' })),
+    );
 
     await expect(requestJson('http://api.test/health', { auth: false })).resolves.toEqual({
       status: 'ok',
@@ -67,7 +70,9 @@ describe('requestJson', () => {
       'fetch',
       vi.fn(async () =>
         jsonResponse(
-          { error: { code: 'PROVIDER_TIMEOUT', message: 'provider timed out', request_id: 'req-3' } },
+          {
+            error: { code: 'PROVIDER_TIMEOUT', message: 'provider timed out', request_id: 'req-3' },
+          },
           504,
         ),
       ),
@@ -87,7 +92,10 @@ describe('requestJson', () => {
   });
 
   it('falls back to a status-derived code when a non-2xx body is not an error envelope', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('unauthorized', { status: 401 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('unauthorized', { status: 401 })),
+    );
 
     const error = await requestJson('http://api.test/api/v1/search?q=x', { auth: false }).catch(
       (reason: unknown) => reason,

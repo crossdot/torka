@@ -70,7 +70,11 @@ describe('useSearch', () => {
     expect(search.state.status).toBe('results');
     expect(search.state.query).toBe('matrix');
     expect(search.state.items).toHaveLength(1);
-    expect(mockedSearchTitles).toHaveBeenCalledWith({ q: 'matrix', year: null, signal: expect.any(AbortSignal) });
+    expect(mockedSearchTitles).toHaveBeenCalledWith({
+      q: 'matrix',
+      year: null,
+      signal: expect.any(AbortSignal),
+    });
   });
 
   it('reports empty when a provider answered without items', async () => {
@@ -105,7 +109,10 @@ describe('useSearch', () => {
 
   it('exposes API failures with code and request id', async () => {
     mockedSearchTitles.mockRejectedValueOnce(
-      new ApiError('PROVIDER_UNAVAILABLE', 'providers are down', { status: 503, requestId: 'req-9' }),
+      new ApiError('PROVIDER_UNAVAILABLE', 'providers are down', {
+        status: 503,
+        requestId: 'req-9',
+      }),
     );
     const search = setup();
 
@@ -131,11 +138,16 @@ describe('useSearch', () => {
     await vi.waitFor(() => expect(search.state.status).toBe('results'));
 
     expect(mockedSearchTitles).toHaveBeenCalledTimes(2);
-    expect(mockedSearchTitles).toHaveBeenLastCalledWith({ q: 'matrix', year: 2001, signal: expect.any(AbortSignal) });
+    expect(mockedSearchTitles).toHaveBeenLastCalledWith({
+      q: 'matrix',
+      year: 2001,
+      signal: expect.any(AbortSignal),
+    });
   });
 
   it('ignores responses superseded by a newer request', async () => {
-    const { promise: firstResponse, resolve: resolveFirst } = Promise.withResolvers<SearchResponse>();
+    const { promise: firstResponse, resolve: resolveFirst } =
+      Promise.withResolvers<SearchResponse>();
     mockedSearchTitles
       .mockImplementationOnce(() => firstResponse)
       .mockResolvedValueOnce(response({ items: [item({ id: 'newer' })] }));

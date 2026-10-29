@@ -13,7 +13,9 @@ const status = computed(() => state.status);
 const error = computed(() => state.error);
 const isLoading = computed(() => status.value === 'loading');
 const tokenMissing = !hasApiToken();
-const failedProviderIds = computed(() => failedProviders.value.map((provider) => provider.id).join(', '));
+const failedProviderIds = computed(() =>
+  failedProviders.value.map((provider) => provider.id).join(', '),
+);
 
 function onSubmit(payload: { q: string; year: number | null }): void {
   void run(payload);
@@ -25,20 +27,20 @@ function onSubmit(payload: { q: string; year: number | null }): void {
     <header class="page__header">
       <h1 class="page__title">Поиск</h1>
       <p class="page__lead">
-        Поиск по подключённым провайдерам. Метаданные показываются только тогда, когда их вернул провайдер.
+        Поиск по подключённым провайдерам. Метаданные показываются только тогда, когда их вернул
+        провайдер.
       </p>
     </header>
 
     <p v-if="tokenMissing" class="alert alert--warning" role="status">
-      API-токен не задан: переменная <code>VITE_API_TOKEN</code> пуста, поэтому поиск вернёт ошибку конфигурации.
+      API-токен не задан: переменная <code>VITE_API_TOKEN</code> пуста, поэтому поиск вернёт ошибку
+      конфигурации.
     </p>
 
     <SearchForm :loading="isLoading" @submit="onSubmit" />
 
     <section class="results" aria-live="polite" :aria-busy="isLoading">
-      <p v-if="status === 'idle'" class="state state--idle">
-        Введите запрос и нажмите «Найти».
-      </p>
+      <p v-if="status === 'idle'" class="state state--idle">Введите запрос и нажмите «Найти».</p>
 
       <div v-else-if="status === 'loading'" class="state state--loading">
         <span class="spinner" aria-hidden="true"></span>
@@ -50,10 +52,14 @@ function onSubmit(payload: { q: string; year: number | null }): void {
         <p>{{ error.message }}</p>
         <dl class="error-meta">
           <dt>Код</dt>
-          <dd><code>{{ error.code }}</code></dd>
+          <dd>
+            <code>{{ error.code }}</code>
+          </dd>
           <template v-if="error.requestId !== null">
             <dt>request_id</dt>
-            <dd><code>{{ error.requestId }}</code></dd>
+            <dd>
+              <code>{{ error.requestId }}</code>
+            </dd>
           </template>
         </dl>
         <button class="button" type="button" @click="retry()">Повторить</button>
@@ -62,12 +68,19 @@ function onSubmit(payload: { q: string; year: number | null }): void {
       <template v-else>
         <ProviderStatusList :providers="state.providers" />
 
-        <p v-if="status === 'results' && hasProviderFailures" class="alert alert--warning" role="status">
-          Часть провайдеров не ответила ({{ failedProviderIds }}). Успешные результаты показаны ниже.
+        <p
+          v-if="status === 'results' && hasProviderFailures"
+          class="alert alert--warning"
+          role="status"
+        >
+          Часть провайдеров не ответила ({{ failedProviderIds }}). Успешные результаты показаны
+          ниже.
         </p>
 
         <p v-if="status === 'empty'" class="state state--empty">
-          По запросу «{{ state.query }}» ничего не найдено<template v-if="state.year !== null"> за {{ state.year }} год</template>.
+          По запросу «{{ state.query }}» ничего не найдено<template v-if="state.year !== null">
+            за {{ state.year }} год</template
+          >.
           <template v-if="hasProviderFailures">
             Провайдеры с ошибкой: {{ failedProviderIds }}; их результаты отсутствуют.
           </template>

@@ -50,10 +50,14 @@ onBeforeUnmount(() => {
     <span class="health__dot" aria-hidden="true"></span>
     <span class="visually-hidden">Состояние API:</span>
     <span v-if="state === 'checking'">проверка…</span>
-    <span v-else-if="state === 'ok'">API ok<template v-if="version !== null"> · v{{ version }}</template></span>
+    <span v-else-if="state === 'ok'"
+      >API ok<template v-if="version !== null"> · v{{ version }}</template></span
+    >
     <template v-else>
       <span>API недоступен</span>
-      <button class="button button--ghost button--small" type="button" @click="check">Проверить снова</button>
+      <button class="button button--ghost button--small" type="button" @click="check">
+        Проверить снова
+      </button>
     </template>
   </div>
 </template>

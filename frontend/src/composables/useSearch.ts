@@ -47,9 +47,7 @@ export function useSearch() {
   let controller: AbortController | null = null;
 
   const failedProviders = computed<ProviderStatus[]>(() =>
-    state.providers.filter(
-      (provider) => provider.status !== 'ok' || provider.error_code !== null,
-    ),
+    state.providers.filter((provider) => provider.status !== 'ok' || provider.error_code !== null),
   );
   const hasProviderFailures = computed(() => failedProviders.value.length > 0);
 
