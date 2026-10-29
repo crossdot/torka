@@ -28,12 +28,16 @@ const playing = ref(false);
 const seekBase = ref(0);
 
 const absolutePosition = computed(() => seekBase.value + currentTime.value);
+/** Seekbar value, decoupled from `absolutePosition` so playback updates don't
+ *  yank the slider while the user is dragging it. */
+const sliderValue = ref(0);
 
 let sessionId: string | null = null;
 let hls: Hls | null = null;
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
 let stopped = false;
 let seeking = false;
+let dragging = false;
 
 function setupHls(url: string): void {
   const el = video.value;
@@ -92,6 +96,15 @@ async function seekRemote(positionSecs: number): Promise<void> {
 }
 
 function onSeekInput(e: Event): void {
+  dragging = true;
+  const target = parseFloat((e.target as HTMLInputElement).value);
+  if (Number.isFinite(target)) {
+    sliderValue.value = target;
+  }
+}
+
+function onSeekChange(e: Event): void {
+  dragging = false;
   const target = parseFloat((e.target as HTMLInputElement).value);
   const el = video.value;
   if (el === null || sessionId === null || !Number.isFinite(target)) {
@@ -110,6 +123,9 @@ function onTimeUpdate(): void {
   const el = video.value;
   if (el !== null) {
     currentTime.value = el.currentTime;
+    if (!dragging) {
+      sliderValue.value = absolutePosition.value;
+    }
   }
 }
 
@@ -250,10 +266,11 @@ onBeforeUnmount(() => {
           type="range"
           :min="0"
           :max="durationSecs ?? 0"
-          :value="absolutePosition"
+          :value="sliderValue"
           step="1"
           aria-label="Позиция"
           @input="onSeekInput"
+          @change="onSeekChange"
         />
         <span class="controls__time">
           {{ formatTime(absolutePosition) }} / {{ formatTime(durationSecs ?? 0) }}
