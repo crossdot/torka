@@ -287,7 +287,7 @@ async fn seek_restarts_pipeline() {
     // 3. Record the first segment mtime, then seek to 6s.
     let seg = manager.segment_path(&id, "seg_000.ts").unwrap();
     let before = std::fs::metadata(&seg).unwrap().modified().unwrap();
-    manager.seek(&id, 6.0).await;
+    manager.seek(&id, 6.0).await.unwrap();
 
     // 4. Wait for the new generation to rewrite the first segment.
     let deadline = std::time::Instant::now() + Duration::from_secs(15);

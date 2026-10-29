@@ -173,11 +173,23 @@ impl StreamingManager {
         }
     }
 
-    /// Request a seek to `position_secs` (restarts the pipeline at that position).
-    pub async fn seek(&self, id: &str, position_secs: f64) {
-        if let Some(session) = self.sessions.lock().await.get(id).cloned() {
-            session.seek(position_secs);
-        }
+    /// Request a seek to `position_secs` and wait until the pipeline has been
+    /// restarted at that position (first segment ready), so a client reloading
+    /// the playlist observes the new stream rather than the previous one.
+    pub async fn seek(&self, id: &str, position_secs: f64) -> Result<(), AppError> {
+        let session = self
+            .sessions
+            .lock()
+            .await
+            .get(id)
+            .cloned()
+            .ok_or_else(|| AppError::not_found("session not found"))?;
+        let notified = session.seek_done.notified();
+        session.seek(position_secs);
+        tokio::time::timeout(self.ready_timeout, notified)
+            .await
+            .map_err(|_| AppError::internal("seek timed out"))?;
+        Ok(())
     }
 
     pub fn playlist_path(&self, id: &str) -> Option<PathBuf> {

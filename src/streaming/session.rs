@@ -8,7 +8,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use tokio::sync::{Mutex, watch};
+use tokio::sync::{Mutex, Notify, watch};
 use tokio_util::sync::CancellationToken;
 
 use crate::{config::HwAccelBackend, error::AppError};
@@ -65,6 +65,9 @@ pub struct PlaybackSession {
     error: Arc<Mutex<Option<String>>>,
     /// Total media duration in seconds (from ffprobe), for the player UI.
     duration_secs: Arc<Mutex<Option<f64>>>,
+    /// Signalled once the serve loop has restarted the pipeline after a seek
+    /// (first segment ready), so `manager::seek` can be synchronous.
+    pub(crate) seek_done: Arc<Notify>,
 }
 
 impl PlaybackSession {
@@ -80,6 +83,7 @@ impl PlaybackSession {
             seek_rx,
             error: Arc::new(Mutex::new(None)),
             duration_secs: Arc::new(Mutex::new(None)),
+            seek_done: Arc::new(Notify::new()),
         }
     }
 
@@ -327,12 +331,18 @@ async fn serve(
             }
             Event::Seek(pos) => {
                 ff.stop().await;
+                // Clear stale HLS output so wait_ready detects the new run's first
+                // segment (otherwise the previous segment file masks readiness).
+                let out = base_cfg.output_dir.clone();
+                let _ = tokio::fs::remove_dir_all(&out).await;
+                let _ = tokio::fs::create_dir_all(&out).await;
                 let cfg = HlsConfig {
                     start_time_secs: Some(pos),
                     ..base_cfg.clone()
                 };
                 *ff = FfmpegRunner::start(&cfg)?;
                 ff.wait_ready(env.ready_timeout).await?;
+                session.seek_done.notify_waiters();
                 session.touch().await;
                 tracing::info!(session = %session.id, position = pos, "seek restarted pipeline");
             }

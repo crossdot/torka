@@ -118,7 +118,7 @@ async fn seek(
         Some(_) => return Err(AppError::validation("session not ready")),
         None => return Err(AppError::not_found("session not found")),
     }
-    state.streaming.seek(&id, req.position_secs).await;
+    state.streaming.seek(&id, req.position_secs).await?;
     Ok(StatusCode::ACCEPTED)
 }
 
