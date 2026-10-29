@@ -11,6 +11,11 @@ const router = createRouter({
       component: SearchView,
     },
     {
+      path: '/diagnostics',
+      name: 'diagnostics',
+      component: () => import('@/views/DiagnosticsView.vue'),
+    },
+    {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
       component: () => import('@/views/NotFoundView.vue'),

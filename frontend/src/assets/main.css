@@ -524,3 +524,51 @@ a {
     width: 100%;
   }
 }
+
+.app__nav {
+  display: flex;
+  gap: 1rem;
+  margin-left: 1rem;
+}
+
+.app__nav a {
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+  text-decoration: none;
+}
+
+.app__nav a:hover {
+  color: var(--text);
+}
+
+.app__nav a.router-link-active {
+  color: var(--accent);
+}
+
+.diagnostics {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 40rem;
+  margin: 0;
+  padding: 0;
+}
+
+.diagnostics__row {
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.diagnostics__row dt {
+  color: var(--text-muted);
+}
+
+.diagnostics__row dd {
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}

@@ -50,6 +50,15 @@ impl SearchService {
             providers: statuses,
         }
     }
+
+    /// Stable ids of the currently enabled providers (for diagnostics).
+    pub fn enabled_provider_ids(&self) -> Vec<String> {
+        self.registry
+            .enabled()
+            .iter()
+            .map(|p| p.id().to_string())
+            .collect()
+    }
 }
 
 async fn run_one(

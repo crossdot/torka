@@ -30,6 +30,15 @@ impl HwAccelBackend {
             )),
         }
     }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Software => "software",
+            Self::Vaapi => "vaapi",
+            Self::Nvenc => "nvenc",
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

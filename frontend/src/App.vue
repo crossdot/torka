@@ -8,6 +8,10 @@ import HealthIndicator from '@/components/HealthIndicator.vue';
   <div class="app">
     <header class="app__header">
       <RouterLink class="app__brand" to="/">torka</RouterLink>
+      <nav class="app__nav" aria-label="Основная навигация">
+        <RouterLink to="/">Поиск</RouterLink>
+        <RouterLink to="/diagnostics">Диагностика</RouterLink>
+      </nav>
       <HealthIndicator />
     </header>
 

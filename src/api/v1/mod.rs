@@ -6,6 +6,8 @@ use axum::{
     routing::get,
 };
 
+use serde::Serialize;
+
 use crate::{
     error::{ApiResult, AppError},
     search::model::{SearchQuery, SearchResponse},
@@ -17,7 +19,26 @@ use crate::{
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/search", get(search))
+        .route("/diagnostics", get(diagnostics))
         .fallback(not_found)
+}
+
+#[derive(Serialize)]
+struct DiagnosticsResponse {
+    version: &'static str,
+    providers: Vec<String>,
+    hwaccel_mode: &'static str,
+    auth_configured: bool,
+}
+
+/// Safe diagnostic snapshot: no tokens, paths, or magnet URIs.
+async fn diagnostics(State(state): State<AppState>) -> Json<DiagnosticsResponse> {
+    Json(DiagnosticsResponse {
+        version: env!("CARGO_PKG_VERSION"),
+        providers: state.search.enabled_provider_ids(),
+        hwaccel_mode: state.config.hwaccel_backend.as_str(),
+        auth_configured: state.config.api_token.is_some(),
+    })
 }
 
 #[derive(serde::Deserialize)]
