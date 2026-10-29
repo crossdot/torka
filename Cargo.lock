@@ -1896,6 +1896,7 @@ dependencies = [
  "anyhow",
  "axum",
  "futures-util",
+ "libc",
  "librqbit",
  "percent-encoding",
  "reqwest",

@@ -132,6 +132,7 @@ async fn segment(
         .streaming
         .segment_path(&id, &name)
         .ok_or_else(|| AppError::not_found("segment not found"))?;
+    state.streaming.touch(&id).await;
     let bytes = tokio::fs::read(&path)
         .await
         .map_err(|e| AppError::internal(format!("read segment: {e}")))?;

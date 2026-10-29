@@ -1,7 +1,11 @@
 //! Playback session lifecycle: state machine + orchestration (resolve torrent →
-//! register source → FFmpeg HLS → ready → cleanup).
+//! register source → FFmpeg HLS → ready → cleanup), with idle-timeout expiry.
 
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    path::PathBuf,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
@@ -52,6 +56,7 @@ pub struct PlaybackSession {
     pub dir: PathBuf,
     state: Arc<Mutex<SessionState>>,
     cancel: CancellationToken,
+    last_activity: Arc<Mutex<Instant>>,
 }
 
 impl PlaybackSession {
@@ -61,6 +66,7 @@ impl PlaybackSession {
             dir,
             state: Arc::new(Mutex::new(SessionState::Created)),
             cancel: CancellationToken::new(),
+            last_activity: Arc::new(Mutex::new(Instant::now())),
         }
     }
 
@@ -72,12 +78,23 @@ impl PlaybackSession {
         *self.state.lock().await = s;
     }
 
-    /// Transition `ready -> playing` when a client starts consuming the playlist.
+    /// Transition `ready -> playing` and mark activity (a client started
+    /// consuming the playlist).
     pub async fn mark_playing(&self) {
+        self.touch().await;
         let mut state = self.state.lock().await;
         if *state == SessionState::Ready {
             *state = SessionState::Playing;
         }
+    }
+
+    /// Mark client activity (playlist/segment requests reset the idle timer).
+    pub async fn touch(&self) {
+        *self.last_activity.lock().await = Instant::now();
+    }
+
+    async fn idle_elapsed(&self) -> Duration {
+        self.last_activity.lock().await.elapsed()
     }
 
     /// Request stop; the background task performs cleanup and reaches a terminal
@@ -94,9 +111,17 @@ pub struct SessionEnv {
     pub ffmpeg_path: String,
     pub ready_timeout: Duration,
     pub resolve_timeout: Duration,
+    /// Idle timeout after `ready`; `None` disables expiry.
+    pub idle_timeout: Option<Duration>,
 }
 
-/// Runs the session to completion (ready then stop), or to failure/cancel.
+/// How a session ended (drives the terminal state).
+enum SessionEnd {
+    Stopped,
+    Expired,
+}
+
+/// Runs the session to completion (ready then stop/expiry), or to failure/cancel.
 /// Always performs cleanup (unregister source, remove session dir) and lands in
 /// a terminal state.
 pub async fn run_session(
@@ -116,7 +141,8 @@ pub async fn run_session(
     let _ = tokio::fs::remove_dir_all(&session.dir).await;
 
     let final_state = match result {
-        Ok(()) => SessionState::Stopped,
+        Ok(SessionEnd::Stopped) => SessionState::Stopped,
+        Ok(SessionEnd::Expired) => SessionState::Expired,
         Err(e) => {
             tracing::warn!(session = %session.id, error = %e, "playback failed");
             SessionState::Failed
@@ -132,7 +158,7 @@ async fn orchestrate(
     output_folder: Option<PathBuf>,
     env: &SessionEnv,
     token: &mut Option<String>,
-) -> Result<(), AppError> {
+) -> Result<SessionEnd, AppError> {
     // Resolve torrent metadata (bounded by the resolve timeout).
     session.set_state(SessionState::Resolving).await;
     let handle = tokio::select! {
@@ -143,7 +169,7 @@ async fn orchestrate(
                 Err(_) => return Err(AppError::internal("torrent metadata resolve timed out")),
             }
         }
-        _ = session.cancel.cancelled() => return Ok(()),
+        _ = session.cancel.cancelled() => return Ok(SessionEnd::Stopped),
     };
 
     let files = env.engine.files(&handle).await?;
@@ -166,16 +192,39 @@ async fn orchestrate(
         r = ff.wait_ready(env.ready_timeout) => r,
         _ = session.cancel.cancelled() => {
             ff.stop().await;
-            return Ok(());
+            return Ok(SessionEnd::Stopped);
         }
     };
     ready?;
     session.set_state(SessionState::Ready).await;
 
-    // Stay ready until stopped.
-    session.cancel.cancelled().await;
+    // Stay ready until stopped or idle-expired.
+    let end = wait_for_stop_or_idle(session, env.idle_timeout).await;
     ff.stop().await;
-    Ok(())
+    Ok(end)
+}
+
+/// Wait for stop (cancel) or idle expiry, whichever comes first.
+async fn wait_for_stop_or_idle(
+    session: &Arc<PlaybackSession>,
+    idle_timeout: Option<Duration>,
+) -> SessionEnd {
+    let Some(timeout) = idle_timeout else {
+        session.cancel.cancelled().await;
+        return SessionEnd::Stopped;
+    };
+
+    let check = Duration::from_secs(5).min(timeout);
+    loop {
+        tokio::select! {
+            _ = session.cancel.cancelled() => return SessionEnd::Stopped,
+            _ = tokio::time::sleep(check) => {
+                if session.idle_elapsed().await >= timeout {
+                    return SessionEnd::Expired;
+                }
+            }
+        }
+    }
 }
 
 fn select_file(file_id: Option<usize>, files: &[TorrentFile]) -> Result<usize, AppError> {
@@ -213,5 +262,24 @@ mod tests {
         // files are pre-sorted largest-first by TorrentEngine::files
         let files = vec![file(3, 999), file(0, 10)];
         assert_eq!(select_file(None, &files).unwrap(), 3);
+    }
+
+    #[tokio::test]
+    async fn idle_timeout_expires_session() {
+        let session = Arc::new(PlaybackSession::new("x".into(), "/tmp/x".into()));
+        let end = wait_for_stop_or_idle(&session, Some(Duration::from_millis(50))).await;
+        assert!(matches!(end, SessionEnd::Expired));
+    }
+
+    #[tokio::test]
+    async fn cancel_stops_before_idle_expiry() {
+        let session = Arc::new(PlaybackSession::new("x".into(), "/tmp/x".into()));
+        let s2 = session.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            s2.cancel();
+        });
+        let end = wait_for_stop_or_idle(&session, Some(Duration::from_secs(60))).await;
+        assert!(matches!(end, SessionEnd::Stopped));
     }
 }

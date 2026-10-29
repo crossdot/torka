@@ -1,13 +1,18 @@
 //! FFmpeg HLS runner: spawns FFmpeg as a child process with validated args,
-//! writing HLS into a session directory, with cancellation.
+//! writing HLS into a session directory, with cancellation, a bounded stderr
+//! tail for diagnostics, and graceful shutdown.
 //!
 //! Args are built from an internal config only — never from client input, and
 //! never through a shell (STREAMING.md §12.2).
 
 use std::{
+    collections::VecDeque,
     path::{Path, PathBuf},
+    sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
+
+use tokio::io::AsyncReadExt;
 
 use crate::error::AppError;
 
@@ -53,34 +58,79 @@ fn build_args(config: &HlsConfig) -> Vec<String> {
     args
 }
 
+/// Bounded ring buffer holding the tail of FFmpeg's stderr (bounded diagnostics).
+struct StderrTail {
+    buf: VecDeque<u8>,
+    cap: usize,
+}
+
+impl StderrTail {
+    fn new(cap: usize) -> Self {
+        Self {
+            buf: VecDeque::new(),
+            cap,
+        }
+    }
+
+    fn push(&mut self, chunk: &[u8]) {
+        self.buf.extend(chunk);
+        while self.buf.len() > self.cap {
+            self.buf.pop_front();
+        }
+    }
+
+    fn as_string(&self) -> String {
+        String::from_utf8_lossy(&self.buf.iter().copied().collect::<Vec<_>>()).into_owned()
+    }
+}
+
 pub struct FfmpegRunner {
     child: tokio::process::Child,
     output_dir: PathBuf,
+    stderr: Arc<Mutex<StderrTail>>,
 }
 
 impl FfmpegRunner {
     /// Spawn FFmpeg producing HLS into `config.output_dir`.
     pub fn start(config: &HlsConfig) -> Result<Self, AppError> {
         let args = build_args(config);
-        let child = tokio::process::Command::new(&config.ffmpeg_path)
+        let mut child = tokio::process::Command::new(&config.ffmpeg_path)
             .args(&args)
-            // Discard output for the PoC; bounded stderr capture lands in Phase 6.
             .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped())
             .kill_on_drop(true)
             .spawn()
             .map_err(|e| {
                 AppError::internal(format!("ffmpeg spawn ({}) : {e}", config.ffmpeg_path))
             })?;
 
+        let stderr = Arc::new(Mutex::new(StderrTail::new(8 * 1024)));
+        if let Some(mut reader) = child.stderr.take() {
+            let tail = stderr.clone();
+            tokio::spawn(async move {
+                let mut buf = [0u8; 4096];
+                loop {
+                    match reader.read(&mut buf).await {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => {
+                            if let Ok(mut t) = tail.lock() {
+                                t.push(&buf[..n]);
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
         Ok(Self {
             child,
             output_dir: config.output_dir.clone(),
+            stderr,
         })
     }
 
     /// Wait until at least one `.ts` segment exists, or the process exits, or
-    /// `timeout` elapses.
+    /// `timeout` elapses. On failure the bounded stderr tail is included.
     pub async fn wait_ready(&mut self, timeout: Duration) -> Result<(), AppError> {
         let deadline = Instant::now() + timeout;
         loop {
@@ -92,22 +142,46 @@ impl FfmpegRunner {
                 .try_wait()
                 .map_err(|e| AppError::internal(format!("ffmpeg wait: {e}")))?
             {
+                let tail = stderr_tail(&self.stderr);
                 return Err(AppError::internal(format!(
-                    "ffmpeg exited before ready: {status}"
+                    "ffmpeg exited before ready: {status}: {tail}"
                 )));
             }
             if Instant::now() >= deadline {
-                return Err(AppError::internal("timed out waiting for HLS segment"));
+                let tail = stderr_tail(&self.stderr);
+                return Err(AppError::internal(format!(
+                    "timed out waiting for HLS segment: {tail}"
+                )));
             }
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
     }
 
-    /// Stop FFmpeg and reap the child (idempotent).
+    /// Stop FFmpeg gracefully (SIGTERM, then SIGKILL after a grace period) and
+    /// reap the child. Idempotent.
     pub async fn stop(&mut self) {
+        if let Some(pid) = self.child.id() {
+            // SIGTERM lets FFmpeg flush the playlist/segments (STREAMING.md §12.4).
+            unsafe { libc::kill(pid as i32, libc::SIGTERM) };
+        }
+        if tokio::time::timeout(Duration::from_secs(5), self.child.wait())
+            .await
+            .is_ok()
+        {
+            return;
+        }
         let _ = self.child.kill().await;
         let _ = self.child.wait().await;
     }
+}
+
+fn stderr_tail(stderr: &Arc<Mutex<StderrTail>>) -> String {
+    stderr
+        .lock()
+        .map(|t| t.as_string())
+        .unwrap_or_default()
+        .trim()
+        .to_string()
 }
 
 fn has_segment(dir: &Path) -> bool {
@@ -154,5 +228,13 @@ mod tests {
         let input = args.iter().position(|a| a == "-i").unwrap();
         assert!(ss < input, "-ss must precede -i for input seek");
         assert_eq!(args[ss + 1], "5");
+    }
+
+    #[test]
+    fn stderr_tail_is_bounded() {
+        let mut tail = StderrTail::new(16);
+        tail.push(b"0123456789");
+        tail.push(b"ABCDEFGHIJ");
+        assert_eq!(tail.as_string(), "456789ABCDEFGHIJ"); // first 6 bytes evicted
     }
 }

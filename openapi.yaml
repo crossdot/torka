@@ -352,6 +352,7 @@ components:
         - SESSION_LIMIT_REACHED
         - SESSION_EXPIRED
         - CLEANUP_FAILED
+        - UNAUTHORIZED
         - INTERNAL_ERROR
     Error:
       type: object
