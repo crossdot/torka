@@ -36,7 +36,7 @@ rqbit HTTP API как sidecar (тот же crate, без нового риска
 - Random access: `ManagedTorrent::stream(file_id) -> FileStream`, где
   `FileStream: tokio::io::AsyncRead + AsyncSeek` (приоритизация по позиции чтения, окно 32 MiB).
 - Отмена: `SessionOptions.cancellation_token` + `Session::stop()`.
-- Multi-arch: CI собирает linux/amd64, linux/arm64, linux/arm/v7.
+- Single-arch: CI собирает linux/amd64.
 
 ## Consequences
 

@@ -42,7 +42,7 @@
 
 ### Docker/Synology
 - DSM 7.4.1-90080 U1, Container Manager 24.0.2-1706. CM: 91 x86_64 + 7 armv8 + 0 armv7.
-- Base: `debian:trixie-slim` (FFmpeg 7.1.5); Rust static musl. Multi-arch `linux/amd64+arm64`.
+- Base: `debian:trixie-slim` (FFmpeg 7.1.5); Rust static musl. `linux/amd64`.
 - VA-API только Intel-iGPU (Celeron J4xxx…), нет на AMD/ARM/Atom/Xeon; требует физической валидации.
 
 ## ADR (см. `adr/`)
@@ -51,7 +51,7 @@
 - ADR-003 providers → RuTracker feed-only, Rutor HTML-поиск (robots-compliant).
 - ADR-004 frontend → Axum раздаёт SPA.
 - ADR-005 auth → один Bearer token (env), закрыто по умолчанию.
-- ADR-006 Synology → amd64+arm64, debian:trixie-slim, CI-сборка, VA-API Intel-only.
+- ADR-006 Synology → amd64, debian:trixie-slim, CI-сборка, VA-API Intel-only.
 - ADR-007 metadata → без внешнего каталога в MVP.
 
 ## Минимальный вертикальный прототип (spike, до Phase 1/5)

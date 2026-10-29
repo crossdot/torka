@@ -43,7 +43,7 @@ docker run -d --name torka --init --restart unless-stopped \
 docker compose up -d --build
 ```
 
-`compose.yaml` собирает `Dockerfile` (x86_64); для arm64 — `Dockerfile.arm64`.
+`compose.yaml` собирает `Dockerfile` (x86_64).
 
 ## Разработка
 
@@ -75,5 +75,5 @@ cd frontend && npm install && npm run dev
 
 Реализовано (Phases 0–9 + закрытые зазоры): поиск, провайдеры, streaming (remux +
 транскод + seek), playback API, плеер, аутентификация, idle-timeout, graceful
-shutdown, Docker-образ + CI. Известные ограничения: `arm64` и реальный VA-API
-требуют проверки на железе.
+shutdown, Docker-образ + CI. Известные ограничения: реальный VA-API
+требует проверки на железе.
