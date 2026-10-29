@@ -81,6 +81,10 @@ fn build_args(config: &HlsConfig) -> Vec<String> {
     };
     args.extend(codec_args.iter().map(|s| s.to_string()));
 
+    // HLS WebVTT output only accepts the `webvtt` subtitle codec; drop subtitle
+    // streams (subrip/ass/pgs) instead of failing the muxer on them.
+    args.push("-sn".to_string());
+
     let playlist = config.output_dir.join("out.m3u8");
     let segments = config.output_dir.join("seg_%03d.ts");
     let segments_str = segments.to_string_lossy().into_owned();
