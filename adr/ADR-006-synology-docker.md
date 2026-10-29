@@ -26,7 +26,7 @@ Docker-образ должен работать на Synology DSM через Con
 
 1. **Целевая платформа: x86_64** (`linux/amd64`) с vendor-agnostic GPU: Intel (VA-API),
    NVIDIA (NVENC/NVDEC), AMD (VA-API/Mesa). Запуск/тест сейчас на Intel. `linux/arm64`
-   держать опционально (решение владельца 2026-10-29). См. ADR-008.
+   вынесен в отдельный `Dockerfile.arm64` (software-only, без Intel-драйвера). См. ADR-008.
 2. **Runtime base `debian:trixie-slim`** (version-tagged): FFmpeg 7.1.5, `libva2`,
    `vainfo`; при VA-API — `intel-media-va-driver-non-free` (полная сборка, из `non-free`).
    Rust-бинарь собирается **glibc в том же trixie** (builder `rust:1.99-slim` + runtime

@@ -8,8 +8,7 @@
 #     same glibc the runtime ships (ADR-006 asks for a static musl build; the torrent
 #     engine (`librqbit` -> `openssl-sys`) would require a vendored, perl-built OpenSSL
 #     for musl, so we keep the glibc pair instead);
-#   * primary target is linux/amd64; linux/arm64 is optional and only builds natively
-#     (buildx/QEMU), see the note at the end of the file;
+#   * target is linux/amd64 (x86_64);
 #   * no secrets are baked into the image — `APP_API_TOKEN` is supplied at runtime.
 #
 # Base images use version tags; Debian packages are pinned to the exact trixie
@@ -96,8 +95,7 @@ ENV APP_HOST=0.0.0.0 \
 # the VA-API runtime and its diagnostic tool. `curl` exists only for HEALTHCHECK.
 # `ca-certificates` provides the CA store for the torrent engine's HTTPS client and
 # provider fetches (without it reqwest/native-tls cannot build its HTTP client).
-# The Intel media driver lives in `non-free` and is amd64-only, hence the guard;
-# arm64 hosts (no Intel iGPU) keep the software path.
+# The Intel media driver lives in `non-free` (x86_64 VA-API).
 RUN sed -i 's/^Components: main$/Components: main non-free non-free-firmware/' \
         /etc/apt/sources.list.d/debian.sources \
  && apt-get update \
@@ -107,10 +105,7 @@ RUN sed -i 's/^Components: main$/Components: main non-free non-free-firmware/' \
         vainfo="${VAINFO_VERSION}" \
         curl="${CURL_VERSION}" \
         ca-certificates \
- && if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
-        apt-get install -y --no-install-recommends \
-            intel-media-va-driver-non-free="${INTEL_MEDIA_VERSION}"; \
-    fi \
+        intel-media-va-driver-non-free="${INTEL_MEDIA_VERSION}" \
  && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
 
 # Unprivileged runtime user. `/cache` and `/config` are the only writable data
@@ -136,9 +131,6 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 
 ENTRYPOINT ["/usr/local/bin/movie-streamer"]
 
-# linux/arm64: build natively on an arm64 builder (no cross-compilation, e.g.
-# `docker buildx build --platform linux/arm64`), and omit the Intel driver.
-#
 # Refreshing Debian package pins (trixie):
 #   docker run --rm debian:trixie-slim sh -c \
 #     'sed -i "s/^Components: main$/Components: main non-free/" \

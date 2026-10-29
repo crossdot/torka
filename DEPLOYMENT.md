@@ -6,7 +6,7 @@
 ## Предварительные требования
 
 - Docker 24+ или Synology Container Manager 24.0.2+.
-- CPU **x86_64** (Intel/AMD); `linux/arm64` — опционально и не проверен на железе.
+- CPU **x86_64** (Intel/AMD). Для arm64 — отдельный `Dockerfile.arm64` (software-only).
 - Для аппаратного ускорения — Intel iGPU/AMD c VA-API (`/dev/dri/renderD128`).
 
 ## Быстрый старт (Compose)
@@ -88,7 +88,7 @@ docker exec <container> vainfo --display drm --device /dev/dri/renderD128
 
 ## Известные ограничения
 
-- `linux/arm64` и реальный VA-API требуют проверки на конкретном железе.
+- `arm64` (отдельный `Dockerfile.arm64`) и реальный VA-API требуют проверки на конкретном железе.
 - Транскодинг (`preferred_mode`) ещё не реализован — сейчас remux/stream-copy.
 - Принудительный вынос наружу (`APP_HOST=0.0.0.0`) — для удалённого доступа ставьте
   VPN или reverse proxy с TLS/auth впереди.
