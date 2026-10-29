@@ -3,11 +3,13 @@
 
 use std::{path::PathBuf, sync::Arc};
 
-use librqbit::{AddTorrent, AddTorrentOptions, ManagedTorrent, Session};
+use librqbit::{
+    AddTorrent, AddTorrentOptions, ManagedTorrent, Session, storage::StorageFactoryExt,
+};
 
 use crate::error::AppError;
 
-use super::SeekableStream;
+use super::{SeekableStream, memory_storage::MemoryStorageFactory};
 
 /// A torrent source to resolve.
 pub enum TorrentSource {
@@ -36,14 +38,21 @@ pub struct TorrentFile {
 /// Wraps a librqbit [`Session`] for metadata resolution and streaming.
 pub struct TorrentEngine {
     session: Arc<Session>,
+    stream_buffer_bytes: usize,
 }
 
 impl TorrentEngine {
-    pub async fn new(download_dir: impl Into<PathBuf>) -> Result<Self, AppError> {
+    pub async fn new(
+        download_dir: impl Into<PathBuf>,
+        stream_buffer_bytes: usize,
+    ) -> Result<Self, AppError> {
         let session = Session::new(download_dir.into())
             .await
             .map_err(|e| AppError::internal(format!("torrent session: {e}")))?;
-        Ok(Self { session })
+        Ok(Self {
+            session,
+            stream_buffer_bytes,
+        })
     }
 
     /// Add a torrent and wait for its metadata to resolve. `output_folder`
@@ -59,13 +68,22 @@ impl TorrentEngine {
             TorrentSource::Bytes(bytes) => AddTorrent::from_bytes(bytes),
         };
 
-        // Always allow overwrite so a pre-existing file (e.g. a partial download
-        // from a previous attempt) is resumed rather than failing with
-        // `allow_overwrite = false`. `output_folder` overrides the download dir
-        // (used by the PoC to detect an already-present file).
+        // Streaming-only: `only_files: []` empties librqbit's background download
+        // queue, so only the FileStream's priority window (the playback buffer) is
+        // fetched — the whole torrent is never downloaded.
+        //
+        // In production (`output_folder: None`) data lives only in the bounded
+        // in-memory storage (no file cache). The PoC keeps filesystem storage so
+        // it can seed a local test file via `output_folder`.
+        let output_folder = output_folder.map(|p| p.to_string_lossy().into_owned());
+        let storage_factory = output_folder
+            .is_none()
+            .then(|| MemoryStorageFactory::new(self.stream_buffer_bytes).boxed());
         let opts = Some(AddTorrentOptions {
-            output_folder: output_folder.map(|p| p.to_string_lossy().into_owned()),
+            output_folder,
             overwrite: true,
+            only_files: Some(vec![]),
+            storage_factory,
             ..Default::default()
         });
 

@@ -34,7 +34,13 @@ pub struct StreamingManager {
 
 impl StreamingManager {
     pub async fn new(config: &Config) -> Result<Self, AppError> {
-        let engine = Arc::new(TorrentEngine::new(config.cache_dir.clone()).await?);
+        let engine = Arc::new(
+            TorrentEngine::new(
+                config.cache_dir.clone(),
+                config.stream_buffer_bytes as usize,
+            )
+            .await?,
+        );
         let source = Arc::new(SourceServer::bind().await?);
         Ok(Self {
             engine,

@@ -59,7 +59,7 @@ async fn main() -> anyhow::Result<()> {
     let torrent_bytes = ctor.as_bytes()?.to_vec();
 
     // 3. Resolve metadata + enumerate files (file is already on disk).
-    let engine = TorrentEngine::new(format!("{root}/dl")).await?;
+    let engine = TorrentEngine::new(format!("{root}/dl"), 1 << 30).await?;
     let handle = engine
         .add(TorrentSource::Bytes(torrent_bytes), Some(root.into()))
         .await?;

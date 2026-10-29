@@ -11,6 +11,7 @@ impl<T: AsyncRead + AsyncSeek + Send + Unpin> SeekableStream for T {}
 
 pub mod ffmpeg;
 pub mod manager;
+pub mod memory_storage;
 pub mod plan;
 pub mod probe;
 pub mod session;

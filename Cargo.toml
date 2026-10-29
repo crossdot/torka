@@ -33,6 +33,7 @@ roxmltree = "0.21"
 scraper = "0.29"
 uuid = { version = "1", features = ["v4"] }
 libc = "0.2"
+anyhow = "1"
 
 [dev-dependencies]
 anyhow = "1"

@@ -45,7 +45,7 @@ docker build -t movie-streamer:0.1.0 .
 | `HWACCEL_MODE` | `auto` / `software` / `vaapi` / `nvenc` | auto |
 | `HWACCEL_DEVICE` | device-node бэкенда (пусто = авто) | `/dev/dri/renderD128` |
 | `MAX_ACTIVE_SESSIONS` | лимит одновременных сессий | 2 |
-| `CACHE_MAX_BYTES` | лимит временного кеша | 2 GiB |
+| `STREAM_BUFFER_BYTES` | in-memory буфер стрима на torrent (LRU-вытеснение, без файлового кеша) | 1 GiB |
 | `TORRENT_RESOLVE_TIMEOUT_SECS` | таймаут резолва magnet | 60 |
 
 ## Аутентификация (ADR-005)

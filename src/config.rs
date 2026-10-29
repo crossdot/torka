@@ -60,7 +60,9 @@ pub struct Config {
     pub cache_dir: String,
     pub session_dir: String,
     pub static_dir: String,
-    pub cache_max_bytes: u64,
+    /// Per-torrent in-memory streaming buffer (no file cache). Old pieces past
+    /// this budget are evicted (LRU).
+    pub stream_buffer_bytes: u64,
     pub max_active_sessions: usize,
     pub session_idle_timeout_secs: u64,
     pub search_timeout_secs: u64,
@@ -127,7 +129,7 @@ impl Config {
             cache_dir: env_str("CACHE_DIR", "/cache"),
             session_dir: env_str("SESSION_DIR", "/cache/sessions"),
             static_dir: env_str("STATIC_DIR", "frontend/dist"),
-            cache_max_bytes: env_parse("CACHE_MAX_BYTES", 2_147_483_648u64)?,
+            stream_buffer_bytes: env_parse("STREAM_BUFFER_BYTES", 1_073_741_824u64)?,
             max_active_sessions: env_parse("MAX_ACTIVE_SESSIONS", 2usize)?,
             session_idle_timeout_secs: env_parse("SESSION_IDLE_TIMEOUT_SECS", 900u64)?,
             search_timeout_secs: env_parse("SEARCH_TIMEOUT_SECS", 8u64)?,
@@ -173,7 +175,7 @@ impl Default for Config {
             cache_dir: "/cache".into(),
             session_dir: "/cache/sessions".into(),
             static_dir: "frontend/dist".into(),
-            cache_max_bytes: 2_147_483_648,
+            stream_buffer_bytes: 1_073_741_824,
             max_active_sessions: 2,
             session_idle_timeout_secs: 900,
             search_timeout_secs: 8,
