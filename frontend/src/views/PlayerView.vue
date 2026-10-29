@@ -81,13 +81,13 @@ async function seekRemote(positionSecs: number): Promise<void> {
   try {
     await seekPlaybackSession(sessionId, positionSecs);
   } catch (e) {
+    seeking = false;
     fail(e);
     return;
-  } finally {
-    seeking = false;
   }
   seekBase.value = positionSecs;
   currentTime.value = 0;
+  seeking = false;
   if (hls !== null) {
     hls.destroy();
     hls = null;
@@ -106,9 +106,12 @@ function onSeekChange(e: Event): void {
   if (el === null || sessionId === null || !Number.isFinite(target)) {
     return;
   }
-  // Beyond the buffered range (forward) -> restart the pipeline there.
-  const absBufferedEnd = seekBase.value + bufferedEnd();
-  if (absBufferedEnd > 0 && target > absBufferedEnd + 1) {
+  // The current stream covers [seekBase, seekBase + bufferedEnd]. Anything
+  // outside it (forward beyond the buffer, or backward before the stream
+  // start) needs a pipeline restart.
+  const absStart = seekBase.value;
+  const absEnd = seekBase.value + bufferedEnd();
+  if (target > absEnd + 1 || target < absStart) {
     void seekRemote(target);
   } else {
     el.currentTime = Math.max(0, target - seekBase.value);
@@ -119,7 +122,7 @@ function onTimeUpdate(): void {
   const el = video.value;
   if (el !== null) {
     currentTime.value = el.currentTime;
-    if (!dragging && seekbar.value !== null) {
+    if (!dragging && !seeking && seekbar.value !== null) {
       seekbar.value.value = String(absolutePosition.value);
     }
   }
