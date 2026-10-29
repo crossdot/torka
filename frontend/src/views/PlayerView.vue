@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import Hls from 'hls.js';
 import { RouterLink, useRoute } from 'vue-router';
 
@@ -168,8 +168,11 @@ async function poll(): Promise<void> {
   }
 }
 
-function play(url: string): void {
+async function play(url: string): Promise<void> {
   phase.value = 'ready';
+  // The <video> is conditionally rendered: wait for the DOM to mount it so the
+  // `video` ref is populated before attaching hls.js.
+  await nextTick();
   setupHls(url);
 }
 
