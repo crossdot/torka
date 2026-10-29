@@ -7,6 +7,7 @@ import {
   createPlaybackSession,
   getPlaybackStatus,
   playlistUrl,
+  seekPlaybackSession,
   stopPlaybackSession,
 } from '@/api/playback';
 
@@ -24,6 +25,92 @@ let sessionId: string | null = null;
 let hls: Hls | null = null;
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
 let stopped = false;
+let durationSecs: number | null = null;
+let seeking = false;
+
+/** Pin the seekbar to the known total duration (the playlist is still growing). */
+function applyKnownDuration(): void {
+  if (hls === null || durationSecs === null) {
+    return;
+  }
+  for (const level of hls.levels) {
+    if (level.details) {
+      level.details.totalduration = durationSecs;
+    }
+  }
+}
+
+function setupHls(url: string): void {
+  const el = video.value;
+  if (el === null) {
+    error.value = 'Видеоэлемент не инициализирован.';
+    phase.value = 'error';
+    return;
+  }
+
+  if (Hls.isSupported()) {
+    hls = new Hls();
+    hls.loadSource(url);
+    hls.attachMedia(el);
+    hls.on(Hls.Events.MANIFEST_PARSED, applyKnownDuration);
+    hls.on(Hls.Events.LEVEL_UPDATED, applyKnownDuration);
+    hls.on(Hls.Events.ERROR, (_event, data) => {
+      if (data.fatal) {
+        error.value = 'Ошибка воспроизведения потока.';
+      }
+    });
+  } else if (el.canPlayType('application/vnd.apple.mpegurl')) {
+    el.src = url;
+  } else {
+    error.value = 'Этот браузер не поддерживает HLS.';
+  }
+}
+
+function bufferedEnd(): number {
+  const el = video.value;
+  if (el === null) {
+    return 0;
+  }
+  const b = el.buffered;
+  return b.length > 0 ? b.end(b.length - 1) : 0;
+}
+
+/** Restart the pipeline at `positionSecs`, then reload the stream from there. */
+async function seekRemote(positionSecs: number): Promise<void> {
+  if (sessionId === null || seeking) {
+    return;
+  }
+  seeking = true;
+  try {
+    await seekPlaybackSession(sessionId, positionSecs);
+  } catch (e) {
+    fail(e);
+    return;
+  } finally {
+    seeking = false;
+  }
+  if (hls !== null) {
+    hls.destroy();
+    hls = null;
+  }
+  setupHls(playlistUrl(sessionId));
+}
+
+/** Forward seek beyond the buffered range needs a pipeline restart. */
+function onSeeking(): void {
+  if (seeking) {
+    return;
+  }
+  const el = video.value;
+  if (el === null || sessionId === null) {
+    return;
+  }
+  const target = el.currentTime;
+  const end = bufferedEnd();
+  if (end > 0 && target > end + 1) {
+    void seekRemote(target);
+  }
+}
 
 async function start(): Promise<void> {
   try {
@@ -42,6 +129,7 @@ async function poll(): Promise<void> {
   try {
     const s = await getPlaybackStatus(sessionId);
     if (s.status === 'ready' || s.status === 'playing') {
+      durationSecs = s.duration_secs ?? null;
       play(playlistUrl(sessionId));
       return;
     }
@@ -60,26 +148,10 @@ async function poll(): Promise<void> {
 function play(url: string): void {
   phase.value = 'ready';
   const el = video.value;
-  if (el === null) {
-    error.value = 'Видеоэлемент не инициализирован.';
-    phase.value = 'error';
-    return;
+  if (el !== null) {
+    el.addEventListener('seeking', onSeeking);
   }
-
-  if (Hls.isSupported()) {
-    hls = new Hls();
-    hls.loadSource(url);
-    hls.attachMedia(el);
-    hls.on(Hls.Events.ERROR, (_event, data) => {
-      if (data.fatal) {
-        error.value = 'Ошибка воспроизведения потока.';
-      }
-    });
-  } else if (el.canPlayType('application/vnd.apple.mpegurl')) {
-    el.src = url;
-  } else {
-    error.value = 'Этот браузер не поддерживает HLS.';
-  }
+  setupHls(url);
 }
 
 function fail(e: unknown): void {
@@ -100,6 +172,7 @@ async function stop(): Promise<void> {
     hls.destroy();
     hls = null;
   }
+  video.value?.removeEventListener('seeking', onSeeking);
   if (sessionId !== null) {
     const id = sessionId;
     sessionId = null;

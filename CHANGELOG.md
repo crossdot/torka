@@ -17,6 +17,10 @@
 - **Совместимость с браузером**: при транскоде аудио даунмиксится в стерео AAC
   (`-ac 2`), т.к. браузерные MSE-декодеры не воспроизводят 5.1 AAC (иначе —
   «no video with supported format and mime type found»).
+- **Полная длительность и перемотка**: `duration_secs` пробуется ffprobe и
+  возвращается в статусе сессии; плейлист помечается `#EXT-X-PLAYLIST-TYPE:EVENT`,
+  а при перемотке вперёд плеер рестартует пайплайн (`POST /seek`) и в плейлист
+  инжектится `#EXT-X-START:TIME-OFFSET`, чтобы шкала показывала полную длину.
 - **Аппаратное ускорение** (vendor-agnostic): Intel/AMD VA-API, NVIDIA NVENC +
   software fallback.
 - **Аутентификация**: один Bearer-токен (`APP_API_TOKEN`), runtime-ввод в UI

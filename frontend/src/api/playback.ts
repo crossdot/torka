@@ -26,6 +26,14 @@ export async function stopPlaybackSession(id: string): Promise<void> {
   await requestJson<unknown>(apiUrl(`/playback/sessions/${id}`), { method: 'DELETE' });
 }
 
+/** `POST /api/v1/playback/sessions/{id}/seek` — restart the pipeline at `positionSecs`. */
+export function seekPlaybackSession(id: string, positionSecs: number): Promise<void> {
+  return requestJson<void>(apiUrl(`/playback/sessions/${id}/seek`), {
+    method: 'POST',
+    body: { position_secs: positionSecs },
+  });
+}
+
 /** Absolute-path URL of the HLS master playlist for a session. */
 export function playlistUrl(id: string): string {
   return apiUrl(`/playback/sessions/${id}/master.m3u8`);

@@ -140,12 +140,22 @@ impl StreamingManager {
         Some(session.state().await)
     }
 
-    /// Session state + failure reason (if any).
-    pub async fn status_with_error(&self, id: &str) -> Option<(SessionState, Option<String>)> {
+    /// Session state + failure reason + total duration (if probed).
+    pub async fn status_with_error(
+        &self,
+        id: &str,
+    ) -> Option<(SessionState, Option<String>, Option<f64>)> {
         let session = self.sessions.lock().await.get(id).cloned()?;
         let state = session.state().await;
         let error = session.error().await;
-        Some((state, error))
+        let duration = session.duration().await;
+        Some((state, error, duration))
+    }
+
+    /// Absolute timeline offset of the current FFmpeg run (0 until a seek).
+    pub async fn seek_offset(&self, id: &str) -> Option<f64> {
+        let session = self.sessions.lock().await.get(id).cloned()?;
+        Some(session.seek_offset().await)
     }
 
     /// Idempotent stop: signals cancellation and removes the session.

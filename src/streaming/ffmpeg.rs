@@ -92,6 +92,8 @@ fn build_args(config: &HlsConfig) -> Vec<String> {
             "2",
             "-hls_list_size",
             "0",
+            "-hls_playlist_type",
+            "event",
             "-hls_base_url",
             "segments/",
             "-hls_segment_filename",

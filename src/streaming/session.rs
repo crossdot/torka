@@ -63,6 +63,10 @@ pub struct PlaybackSession {
     seek_tx: watch::Sender<Option<f64>>,
     seek_rx: watch::Receiver<Option<f64>>,
     error: Arc<Mutex<Option<String>>>,
+    /// Total media duration in seconds (from ffprobe), for the player UI.
+    duration_secs: Arc<Mutex<Option<f64>>>,
+    /// Absolute timeline offset of the current FFmpeg run (0 until a seek).
+    seek_offset: Arc<std::sync::Mutex<f64>>,
 }
 
 impl PlaybackSession {
@@ -77,6 +81,8 @@ impl PlaybackSession {
             seek_tx,
             seek_rx,
             error: Arc::new(Mutex::new(None)),
+            duration_secs: Arc::new(Mutex::new(None)),
+            seek_offset: Arc::new(std::sync::Mutex::new(0.0)),
         }
     }
 
@@ -116,6 +122,7 @@ impl PlaybackSession {
     /// Request a seek to `position_secs`: the serve loop restarts FFmpeg with
     /// `-ss` at that position (a new generation).
     pub fn seek(&self, position_secs: f64) {
+        *self.seek_offset.lock().unwrap() = position_secs;
         let _ = self.seek_tx.send(Some(position_secs));
     }
 
@@ -126,6 +133,20 @@ impl PlaybackSession {
 
     async fn set_error(&self, msg: String) {
         *self.error.lock().await = Some(msg);
+    }
+
+    /// Record the total media duration (ffprobe).
+    pub async fn set_duration(&self, secs: Option<f64>) {
+        *self.duration_secs.lock().await = secs;
+    }
+
+    pub async fn duration(&self) -> Option<f64> {
+        *self.duration_secs.lock().await
+    }
+
+    /// Absolute timeline offset of the current FFmpeg run (0 until a seek).
+    pub async fn seek_offset(&self) -> f64 {
+        *self.seek_offset.lock().unwrap()
     }
 }
 
@@ -221,6 +242,7 @@ async fn orchestrate(
     // Probe codecs and choose remux vs transcode.
     session.set_state(SessionState::Buffering).await;
     let info = probe(&env.ffprobe_path, &url, env.resolve_timeout).await?;
+    session.set_duration(info.duration_secs).await;
     let encode = match select_mode(
         preferred_mode,
         &info,

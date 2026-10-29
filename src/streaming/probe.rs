@@ -7,22 +7,31 @@ use serde::Deserialize;
 
 use crate::error::AppError;
 
-/// Video/audio codec names of a media source.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+/// Video/audio codec names + total duration of a media source.
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct StreamInfo {
     pub video_codec: Option<String>,
     pub audio_codec: Option<String>,
+    /// Total media duration in seconds (from the container `format`), when
+    /// ffprobe can determine it.
+    pub duration_secs: Option<f64>,
 }
 
 #[derive(Deserialize)]
 struct FfprobeOutput {
     streams: Vec<FfprobeStream>,
+    format: Option<FfprobeFormat>,
 }
 
 #[derive(Deserialize)]
 struct FfprobeStream {
     codec_type: Option<String>,
     codec_name: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct FfprobeFormat {
+    duration: Option<String>,
 }
 
 /// Run `ffprobe` on `input_url` and return the first video/audio codecs.
@@ -36,7 +45,7 @@ pub async fn probe(
         "-v",
         "error",
         "-show_entries",
-        "stream=codec_type,codec_name",
+        "stream=codec_type,codec_name:format=duration",
         "-of",
         "json",
         input_url,
@@ -72,9 +81,16 @@ fn parse_streams(json: &[u8]) -> Result<StreamInfo, AppError> {
             .and_then(|s| s.codec_name.clone())
     };
 
+    let duration_secs = parsed
+        .format
+        .as_ref()
+        .and_then(|f| f.duration.as_deref())
+        .and_then(|d| d.parse::<f64>().ok());
+
     Ok(StreamInfo {
         video_codec: find("video"),
         audio_codec: find("audio"),
+        duration_secs,
     })
 }
 

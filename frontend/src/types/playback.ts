@@ -9,4 +9,5 @@ export interface PlaybackStatus {
   readonly session_id: string;
   readonly status: string;
   readonly error?: string | null;
+  readonly duration_secs?: number | null;
 }
