@@ -59,10 +59,12 @@ impl TorrentEngine {
             TorrentSource::Bytes(bytes) => AddTorrent::from_bytes(bytes),
         };
 
-        let opts = output_folder.map(|p| AddTorrentOptions {
-            output_folder: Some(p.to_string_lossy().into_owned()),
-            // Accept a pre-existing file (hash it as already downloaded); used by
-            // the PoC to seed a local test torrent without a live peer.
+        // Always allow overwrite so a pre-existing file (e.g. a partial download
+        // from a previous attempt) is resumed rather than failing with
+        // `allow_overwrite = false`. `output_folder` overrides the download dir
+        // (used by the PoC to detect an already-present file).
+        let opts = Some(AddTorrentOptions {
+            output_folder: output_folder.map(|p| p.to_string_lossy().into_owned()),
             overwrite: true,
             ..Default::default()
         });
