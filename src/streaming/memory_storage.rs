@@ -6,7 +6,11 @@
 //! default filesystem storage and its unbounded sparse-file cache with a fixed
 //! memory budget.
 
-use std::{collections::HashMap, path::Path, sync::Mutex};
+use std::{
+    collections::{HashMap, HashSet},
+    path::Path,
+    sync::Mutex,
+};
 
 use anyhow::Context;
 use librqbit::{
@@ -50,10 +54,25 @@ impl StorageFactory for MemoryStorageFactory {
         // Keep at least a few pieces so a single large piece can't thrash the
         // buffer (evicting the piece we just wrote).
         let max_bytes = self.max_bytes.max(piece_len.saturating_mul(8));
+        // Pin the first and last piece of every file: FFmpeg re-reads a file's
+        // header (start) and its seek index (end) on every restart/seek; if
+        // those were LRU-evicted the reopen fails with "End of file".
+        let pinned: HashSet<u32> = metadata
+            .file_infos
+            .iter()
+            .filter(|f| f.len > 0)
+            .flat_map(|f| {
+                let plen = piece_len as u64;
+                let first = (f.offset_in_torrent / plen) as u32;
+                let last = ((f.offset_in_torrent + f.len - 1) / plen) as u32;
+                [first, last]
+            })
+            .collect();
         Ok(MemoryStorage {
             file_infos: metadata.file_infos.clone(),
             piece_len,
             max_bytes,
+            pinned,
             inner: Mutex::new(Inner {
                 pieces: HashMap::new(),
                 total_bytes: 0,
@@ -71,6 +90,7 @@ pub struct MemoryStorage {
     file_infos: FileInfos,
     piece_len: usize,
     max_bytes: usize,
+    pinned: HashSet<u32>,
     inner: Mutex<Inner>,
 }
 
@@ -136,17 +156,16 @@ impl TorrentStorage for MemoryStorage {
         piece.last_access = *clock;
         *clock += 1;
 
-        // Evict least-recently-used pieces while over budget.
+        // Evict least-recently-used pieces while over budget, never the pinned
+        // header/index pieces.
         while *total_bytes > self.max_bytes {
-            let victim = match pieces
+            let victim = pieces
                 .iter()
+                .filter(|(k, _)| !self.pinned.contains(k))
                 .min_by_key(|(_, p)| p.last_access)
-                .map(|(k, _)| *k)
-            {
-                Some(v) => v,
-                None => break,
-            };
-            if let Some(removed) = pieces.remove(&victim) {
+                .map(|(k, _)| *k);
+            let Some(v) = victim else { break };
+            if let Some(removed) = pieces.remove(&v) {
                 *total_bytes -= removed.data.len();
             }
         }
@@ -181,6 +200,7 @@ impl TorrentStorage for MemoryStorage {
             file_infos: self.file_infos.clone(),
             piece_len: self.piece_len,
             max_bytes: self.max_bytes,
+            pinned: self.pinned.clone(),
             inner: Mutex::new(inner),
         }))
     }
