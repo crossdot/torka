@@ -149,4 +149,19 @@ impl TorrentEngine {
             .await
             .map_err(|e| AppError::internal(format!("delete torrent: {e}")))
     }
+
+    /// Re-add a torrent with a fresh in-memory storage (using the already
+    /// resolved torrent bytes, so no metadata re-resolution). Used on seek so
+    /// FFmpeg's probe/seek can re-read the header/Cues the LRU evicted.
+    pub async fn re_add(
+        &self,
+        handle: &Arc<ManagedTorrent>,
+        output_folder: Option<PathBuf>,
+    ) -> Result<Arc<ManagedTorrent>, AppError> {
+        let bytes = handle
+            .with_metadata(|m| m.torrent_bytes.to_vec())
+            .map_err(|e| AppError::internal(format!("torrent bytes: {e}")))?;
+        self.delete(handle).await?;
+        self.add(TorrentSource::Bytes(bytes), output_folder).await
+    }
 }

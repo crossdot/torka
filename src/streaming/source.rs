@@ -100,6 +100,20 @@ impl SourceServer {
         }
     }
 
+    /// Point an existing token at a fresh torrent handle (after a re-add on
+    /// seek); the file id and length are unchanged.
+    pub fn replace(&self, token: &str, handle: Arc<ManagedTorrent>) -> Result<(), AppError> {
+        let mut routes = self
+            .state
+            .routes
+            .write()
+            .map_err(|_| AppError::internal("source registry poisoned"))?;
+        if let Some(route) = routes.get_mut(token) {
+            route.handle = handle;
+        }
+        Ok(())
+    }
+
     pub fn shutdown(self) {
         self.join.abort();
     }

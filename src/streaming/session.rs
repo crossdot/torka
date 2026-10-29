@@ -73,6 +73,10 @@ pub struct PlaybackSession {
     /// Resolved torrent handle, removed from the engine on session end so a
     /// later reopen starts fresh (in-memory storage is otherwise stale).
     torrent: Arc<Mutex<Option<Arc<ManagedTorrent>>>>,
+    /// Selected file id (for re-adding the torrent on seek).
+    file_id: Arc<Mutex<Option<usize>>>,
+    /// Loopback source token (for re-pointing it at a fresh handle on seek).
+    token: Arc<Mutex<Option<String>>>,
 }
 
 impl PlaybackSession {
@@ -90,6 +94,8 @@ impl PlaybackSession {
             duration_secs: Arc::new(Mutex::new(None)),
             seek_done: Arc::new(Notify::new()),
             torrent: Arc::new(Mutex::new(None)),
+            file_id: Arc::new(Mutex::new(None)),
+            token: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -157,6 +163,24 @@ impl PlaybackSession {
 
     pub async fn take_torrent(&self) -> Option<Arc<ManagedTorrent>> {
         self.torrent.lock().await.take()
+    }
+
+    /// Selected file id (for re-adding the torrent on seek).
+    pub async fn set_file_id(&self, file_id: usize) {
+        *self.file_id.lock().await = Some(file_id);
+    }
+
+    pub async fn file_id(&self) -> Option<usize> {
+        *self.file_id.lock().await
+    }
+
+    /// Loopback source token.
+    pub async fn set_token(&self, token: String) {
+        *self.token.lock().await = Some(token);
+    }
+
+    pub async fn token(&self) -> Option<String> {
+        self.token.lock().await.clone()
     }
 }
 
@@ -254,7 +278,10 @@ async fn orchestrate(
     let file_id = select_file(file_id, &files)?;
 
     let url = env.source.register(handle.clone(), file_id)?;
-    *token = Some(url.rsplit('/').next().unwrap_or_default().to_string());
+    let token_str = url.rsplit('/').next().unwrap_or_default().to_string();
+    *token = Some(token_str.clone());
+    session.set_file_id(file_id).await;
+    session.set_token(token_str).await;
 
     // Probe codecs and choose remux vs transcode.
     session.set_state(SessionState::Buffering).await;
@@ -355,6 +382,15 @@ async fn serve(
             }
             Event::Seek(pos) => {
                 ff.stop().await;
+                // Re-add the torrent with a fresh in-memory storage so FFmpeg's
+                // probe/seek can re-read the header/Cues the LRU evicted.
+                if let Some(handle) = session.take_torrent().await {
+                    let new_handle = env.engine.re_add(&handle, None).await?;
+                    session.set_torrent(new_handle.clone()).await;
+                    if let Some(token) = session.token().await {
+                        env.source.replace(&token, new_handle)?;
+                    }
+                }
                 // Clear stale HLS output so wait_ready detects the new run's first
                 // segment (otherwise the previous segment file masks readiness).
                 let out = base_cfg.output_dir.clone();
