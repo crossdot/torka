@@ -38,19 +38,13 @@ impl HttpClient {
         Ok(Self { client })
     }
 
-    /// Fetch `url` into a UTF-8 string, enforcing [`MAX_RESPONSE_BYTES`] and
-    /// re-validating the final URL after redirects.
+    /// Fetch `url` into a UTF-8 string, enforcing [`MAX_RESPONSE_BYTES`].
+    /// Redirects are SSRF-validated by the client's redirect policy; the initial
+    /// URL is operator-configured and therefore trusted.
     pub async fn get(&self, url: &str) -> Result<String, ProviderError> {
-        let resp = self.client.get(url).send().await.map_err(map_reqwest_err)?;
-
-        if !is_safe_url(resp.url()) {
-            return Err(ProviderError::Unavailable(
-                "redirected to an unsafe host".into(),
-            ));
-        }
+        let mut resp = self.client.get(url).send().await.map_err(map_reqwest_err)?;
 
         let mut bytes = Vec::new();
-        let mut resp = resp;
         while let Some(chunk) = resp.chunk().await.map_err(map_reqwest_err)? {
             if bytes.len() + chunk.len() > MAX_RESPONSE_BYTES {
                 return Err(ProviderError::Unavailable("response too large".into()));

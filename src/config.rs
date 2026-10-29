@@ -58,6 +58,8 @@ pub struct Config {
     pub provider_rutracker_enabled: bool,
     pub provider_rutor_enabled: bool,
     pub provider_rutracker_forum_id: String,
+    pub provider_rutracker_urls: Vec<String>,
+    pub provider_rutor_urls: Vec<String>,
 }
 
 fn env_str(key: &str, default: &str) -> String {
@@ -75,6 +77,17 @@ where
             .map_err(|e| format!("invalid {key}={raw:?}: {e}")),
         Err(_) => Ok(default),
     }
+}
+
+/// Comma-separated list, trimmed and with trailing slashes stripped.
+fn env_list(key: &str, default: &str) -> Vec<String> {
+    env::var(key)
+        .unwrap_or_else(|_| default.to_owned())
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.trim_end_matches('/').to_owned())
+        .collect()
 }
 
 impl Config {
@@ -108,6 +121,14 @@ impl Config {
             provider_rutracker_enabled: env_parse("PROVIDER_RUTRACKER_ENABLED", false)?,
             provider_rutor_enabled: env_parse("PROVIDER_RUTOR_ENABLED", false)?,
             provider_rutracker_forum_id: env_str("PROVIDER_RUTRACKER_FORUM_ID", "0"),
+            provider_rutracker_urls: env_list(
+                "PROVIDER_RUTRACKER_URLS",
+                "https://feed.rutracker.cc",
+            ),
+            provider_rutor_urls: env_list(
+                "PROVIDER_RUTOR_URLS",
+                "https://rutor.info,https://rutor.is",
+            ),
         })
     }
 
@@ -142,6 +163,8 @@ impl Default for Config {
             provider_rutracker_enabled: false,
             provider_rutor_enabled: false,
             provider_rutracker_forum_id: "0".into(),
+            provider_rutracker_urls: vec!["https://feed.rutracker.cc".into()],
+            provider_rutor_urls: vec!["https://rutor.info".into(), "https://rutor.is".into()],
         }
     }
 }

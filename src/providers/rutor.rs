@@ -14,16 +14,12 @@ use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 #[derive(Clone)]
 pub struct RutorProvider {
     http: HttpClient,
+    base_urls: Vec<String>,
 }
 
 impl RutorProvider {
-    pub fn new(http: HttpClient) -> Self {
-        Self { http }
-    }
-
-    fn search_url(&self, query: &str) -> String {
-        let encoded = utf8_percent_encode(query, NON_ALPHANUMERIC);
-        format!("https://rutor.info/search/{encoded}")
+    pub fn new(http: HttpClient, base_urls: Vec<String>) -> Self {
+        Self { http, base_urls }
     }
 }
 
@@ -33,9 +29,16 @@ impl Provider for RutorProvider {
     }
 
     async fn search(&self, query: &SearchQuery) -> Result<Vec<TorrentResult>, ProviderError> {
-        let url = self.search_url(&query.q);
-        let html = self.http.get(&url).await?;
-        parse_search(&html)
+        let encoded = utf8_percent_encode(&query.q, NON_ALPHANUMERIC);
+        let mut last_err = None;
+        for base in &self.base_urls {
+            let url = format!("{base}/search/{encoded}");
+            match self.http.get(&url).await {
+                Ok(html) => return parse_search(&html),
+                Err(e) => last_err = Some(e),
+            }
+        }
+        Err(last_err.unwrap_or_else(|| ProviderError::Unavailable("no base URL configured".into())))
     }
 }
 

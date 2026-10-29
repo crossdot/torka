@@ -15,16 +15,17 @@ use super::{http::HttpClient, magnet::magnet_info_hash};
 #[derive(Clone)]
 pub struct RuTrackerProvider {
     http: HttpClient,
+    base_urls: Vec<String>,
     forum_id: String,
 }
 
 impl RuTrackerProvider {
-    pub fn new(http: HttpClient, forum_id: String) -> Self {
-        Self { http, forum_id }
-    }
-
-    fn feed_url(&self) -> String {
-        format!("https://feed.rutracker.cc/atom/f/{}.atom", self.forum_id)
+    pub fn new(http: HttpClient, base_urls: Vec<String>, forum_id: String) -> Self {
+        Self {
+            http,
+            base_urls,
+            forum_id,
+        }
     }
 }
 
@@ -34,12 +35,21 @@ impl Provider for RuTrackerProvider {
     }
 
     async fn search(&self, query: &SearchQuery) -> Result<Vec<TorrentResult>, ProviderError> {
-        let xml = self.http.get(&self.feed_url()).await?;
         let needle = query.q.to_lowercase();
-        Ok(parse_feed(&xml)?
-            .into_iter()
-            .filter(|r| r.title.to_lowercase().contains(&needle))
-            .collect())
+        let mut last_err = None;
+        for base in &self.base_urls {
+            let url = format!("{base}/atom/f/{}.atom", self.forum_id);
+            match self.http.get(&url).await {
+                Ok(xml) => {
+                    return Ok(parse_feed(&xml)?
+                        .into_iter()
+                        .filter(|r| r.title.to_lowercase().contains(&needle))
+                        .collect());
+                }
+                Err(e) => last_err = Some(e),
+            }
+        }
+        Err(last_err.unwrap_or_else(|| ProviderError::Unavailable("no base URL configured".into())))
     }
 }
 

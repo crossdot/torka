@@ -72,11 +72,15 @@ impl ProviderRegistry {
             if config.provider_rutracker_enabled {
                 registry = registry.with_provider(AnyProvider::RuTracker(RuTrackerProvider::new(
                     http.clone(),
+                    config.provider_rutracker_urls.clone(),
                     config.provider_rutracker_forum_id.clone(),
                 )));
             }
             if config.provider_rutor_enabled {
-                registry = registry.with_provider(AnyProvider::Rutor(RutorProvider::new(http)));
+                registry = registry.with_provider(AnyProvider::Rutor(RutorProvider::new(
+                    http,
+                    config.provider_rutor_urls.clone(),
+                )));
             }
         }
 
