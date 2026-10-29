@@ -110,6 +110,7 @@ mod tests {
     use super::*;
     use crate::{
         config::Config,
+        rate_limit::RateLimiter,
         search::{
             SearchCache, SearchService,
             fake::FakeProvider,
@@ -135,6 +136,7 @@ mod tests {
             search,
             cache,
             streaming,
+            rate_limiter: Arc::new(RateLimiter::new(300, Duration::from_secs(60))),
         }
     }
 
@@ -202,6 +204,7 @@ mod tests {
             search,
             cache,
             streaming,
+            rate_limiter: Arc::new(RateLimiter::new(300, Duration::from_secs(60))),
         });
 
         let req = Request::builder()

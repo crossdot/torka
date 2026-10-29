@@ -37,6 +37,7 @@ pub enum AppError {
     Validation(String),
     NotFound(String),
     Unauthorized(String),
+    RateLimited(String),
     Internal(String),
 }
 
@@ -53,6 +54,10 @@ impl AppError {
         Self::Unauthorized(msg.into())
     }
 
+    pub fn rate_limited(msg: impl Into<String>) -> Self {
+        Self::RateLimited(msg.into())
+    }
+
     pub fn internal(msg: impl Into<String>) -> Self {
         Self::Internal(msg.into())
     }
@@ -61,9 +66,11 @@ impl AppError {
 impl std::fmt::Display for AppError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Validation(m) | Self::NotFound(m) | Self::Unauthorized(m) | Self::Internal(m) => {
-                f.write_str(m)
-            }
+            Self::Validation(m)
+            | Self::NotFound(m)
+            | Self::Unauthorized(m)
+            | Self::RateLimited(m)
+            | Self::Internal(m) => f.write_str(m),
         }
     }
 }
@@ -76,6 +83,7 @@ impl IntoResponse for AppError {
             Self::Validation(m) => ("VALIDATION_ERROR", StatusCode::BAD_REQUEST, m),
             Self::NotFound(m) => ("NOT_FOUND", StatusCode::NOT_FOUND, m),
             Self::Unauthorized(m) => ("UNAUTHORIZED", StatusCode::UNAUTHORIZED, m),
+            Self::RateLimited(m) => ("RATE_LIMITED", StatusCode::TOO_MANY_REQUESTS, m),
             Self::Internal(m) => ("INTERNAL_ERROR", StatusCode::INTERNAL_SERVER_ERROR, m),
         };
 

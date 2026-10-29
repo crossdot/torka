@@ -47,6 +47,8 @@ docker build -t movie-streamer:0.1.0 .
 | `MAX_ACTIVE_SESSIONS` | лимит одновременных сессий | 2 |
 | `STREAM_BUFFER_BYTES` | in-memory буфер стрима на torrent (LRU-вытеснение, без файлового кеша) | 1 GiB |
 | `HLS_WINDOW_SECS` | сколько секунд HLS-вывода держать на диске (скользящее окно, старые сегменты удаляются) | 300 |
+| `RATE_LIMIT_REQUESTS` | лимит запросов на `/api/v1` на IP за окно (`0` = выключено) | 300 |
+| `RATE_LIMIT_WINDOW_SECS` | окно rate-limit'а в секундах | 60 |
 | `TORRENT_RESOLVE_TIMEOUT_SECS` | таймаут резолва magnet | 60 |
 
 ## Аутентификация (ADR-005)

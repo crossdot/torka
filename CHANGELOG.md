@@ -27,6 +27,8 @@
   software fallback.
 - **Аутентификация**: один Bearer-токен (`APP_API_TOKEN`), runtime-ввод в UI
   (`sessionStorage`); `/health`/`/ready`/SPA публичны.
+- **Rate limiting**: скользящее окно на `/api/v1` по IP (`RATE_LIMIT_REQUESTS`/
+  `RATE_LIMIT_WINDOW_SECS`, `0` = выключено); превышение → `429`.
 - **UI**: поиск, диагностика, плеер (hls.js).
 - **Docker**: один контейнер (backend + SPA + FFmpeg), amd64; Synology Container Manager.
 

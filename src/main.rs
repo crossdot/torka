@@ -1,9 +1,10 @@
-use std::{sync::Arc, time::Duration};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use movie_streamer::{
     api,
     config::Config,
     error::AppError,
+    rate_limit::RateLimiter,
     search::{ProviderRegistry, SearchCache, SearchService},
     state::AppState,
     streaming::StreamingManager,
@@ -41,11 +42,16 @@ async fn main() -> Result<(), AppError> {
         config.search_cache_max_entries,
     ));
     let streaming = Arc::new(StreamingManager::new(&config).await?);
+    let rate_limiter = Arc::new(RateLimiter::new(
+        config.rate_limit_requests,
+        Duration::from_secs(config.rate_limit_window_secs),
+    ));
     let state = AppState {
         config,
         search,
         cache,
         streaming,
+        rate_limiter,
     };
 
     let app = api::router(state);
@@ -56,10 +62,13 @@ async fn main() -> Result<(), AppError> {
 
     tracing::info!(%addr, version = env!("CARGO_PKG_VERSION"), "server started");
 
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-        .map_err(|e| AppError::internal(format!("server error: {e}")))?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await
+    .map_err(|e| AppError::internal(format!("server error: {e}")))?;
 
     tracing::info!("server stopped");
     Ok(())

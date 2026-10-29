@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     config::Config,
+    rate_limit::RateLimiter,
     search::{SearchCache, SearchService},
     streaming::StreamingManager,
 };
@@ -14,4 +15,5 @@ pub struct AppState {
     pub search: Arc<SearchService>,
     pub cache: Arc<SearchCache>,
     pub streaming: Arc<StreamingManager>,
+    pub rate_limiter: Arc<RateLimiter>,
 }

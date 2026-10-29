@@ -9,11 +9,12 @@ use tower_http::{
     trace::TraceLayer,
 };
 
-use crate::{auth, state::AppState};
+use crate::{auth, rate_limit, state::AppState};
 
 /// Builds the application router. `AppState` is the shared state (Clone + Send + Sync).
 pub fn router(state: AppState) -> Router {
     let api_token = state.config.api_token.clone();
+    let rate_limiter = state.rate_limiter.clone();
     let spa = spa(&state.config.static_dir);
 
     Router::new()
@@ -21,10 +22,15 @@ pub fn router(state: AppState) -> Router {
         .route("/ready", get(health::ready))
         .nest(
             "/api/v1",
-            v1::router().layer(middleware::from_fn_with_state(
-                api_token,
-                auth::require_auth,
-            )),
+            v1::router()
+                .layer(middleware::from_fn_with_state(
+                    api_token,
+                    auth::require_auth,
+                ))
+                .layer(middleware::from_fn_with_state(
+                    rate_limiter,
+                    rate_limit::rate_limit,
+                )),
         )
         .fallback_service(spa)
         .layer(TraceLayer::new_for_http())
