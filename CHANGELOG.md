@@ -14,6 +14,9 @@
 - **Без файлового кеша**: torrent-данные держатся только в ограниченном in-memory
   буфере (`STREAM_BUFFER_BYTES`, LRU-вытеснение), фоновая загрузка всего торрента
   отключена (`only_files: []`); на диск пишутся лишь временные HLS-сегменты сессии.
+- **Совместимость с браузером**: при транскоде аудио даунмиксится в стерео AAC
+  (`-ac 2`), т.к. браузерные MSE-декодеры не воспроизводят 5.1 AAC (иначе —
+  «no video with supported format and mime type found»).
 - **Аппаратное ускорение** (vendor-agnostic): Intel/AMD VA-API, NVIDIA NVENC +
   software fallback.
 - **Аутентификация**: один Bearer-токен (`APP_API_TOKEN`), runtime-ввод в UI

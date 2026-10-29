@@ -57,9 +57,14 @@ fn build_args(config: &HlsConfig) -> Vec<String> {
     args.push("-i".to_string());
     args.push(config.input_url.clone());
 
+    // Transcode audio to stereo AAC: browser MSE decoders reliably support only
+    // stereo AAC-LC; a 5.1 source (AC3/EAC3) would otherwise yield 5.1 AAC that
+    // Chrome/Firefox reject ("no video with supported format and mime type").
     let codec_args: &[&str] = match &config.encode {
         Encode::Copy => &["-c", "copy"],
-        Encode::Software => &["-c:v", "libx264", "-preset", "veryfast", "-c:a", "aac"],
+        Encode::Software => &[
+            "-c:v", "libx264", "-preset", "veryfast", "-c:a", "aac", "-ac", "2",
+        ],
         Encode::Vaapi(_) => &[
             "-vf",
             "format=nv12,hwupload",
@@ -67,8 +72,10 @@ fn build_args(config: &HlsConfig) -> Vec<String> {
             "h264_vaapi",
             "-c:a",
             "aac",
+            "-ac",
+            "2",
         ],
-        Encode::Nvenc => &["-c:v", "h264_nvenc", "-c:a", "aac"],
+        Encode::Nvenc => &["-c:v", "h264_nvenc", "-c:a", "aac", "-ac", "2"],
     };
     args.extend(codec_args.iter().map(|s| s.to_string()));
 
@@ -264,6 +271,7 @@ mod tests {
         let joined = build_args(&cfg(Encode::Software)).join(" ");
         assert!(joined.contains("-c:v libx264"));
         assert!(joined.contains("-c:a aac"));
+        assert!(joined.contains("-ac 2"), "transcode must downmix to stereo");
     }
 
     #[test]
