@@ -6,7 +6,10 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 use tokio::sync::{Mutex, Semaphore};
 use uuid::Uuid;
 
-use crate::{config::Config, error::AppError};
+use crate::{
+    config::{Config, HwAccelBackend},
+    error::AppError,
+};
 
 use super::{
     session::{PlaybackSession, SessionEnv, SessionState, run_session},
@@ -24,6 +27,9 @@ pub struct StreamingManager {
     resolve_timeout: Duration,
     idle_timeout: Option<Duration>,
     ffmpeg_path: String,
+    ffprobe_path: String,
+    hwaccel_backend: HwAccelBackend,
+    hwaccel_device: Option<String>,
 }
 
 impl StreamingManager {
@@ -41,6 +47,9 @@ impl StreamingManager {
             idle_timeout: (config.session_idle_timeout_secs > 0)
                 .then(|| Duration::from_secs(config.session_idle_timeout_secs)),
             ffmpeg_path: config.ffmpeg_path.clone(),
+            ffprobe_path: config.ffprobe_path.clone(),
+            hwaccel_backend: config.hwaccel_backend,
+            hwaccel_device: config.hwaccel_device.clone(),
         })
     }
 
@@ -51,6 +60,7 @@ impl StreamingManager {
         source: TorrentSource,
         file_id: Option<usize>,
         output_folder: Option<PathBuf>,
+        preferred_mode: Option<String>,
     ) -> Result<(String, SessionState), AppError> {
         self.prune_terminal().await;
 
@@ -77,14 +87,17 @@ impl StreamingManager {
             engine: self.engine.clone(),
             source: self.source.clone(),
             ffmpeg_path: self.ffmpeg_path.clone(),
+            ffprobe_path: self.ffprobe_path.clone(),
             ready_timeout: self.ready_timeout,
             resolve_timeout: self.resolve_timeout,
             idle_timeout: self.idle_timeout,
+            hwaccel_backend: self.hwaccel_backend,
+            hwaccel_device: self.hwaccel_device.clone(),
         };
 
         tokio::spawn(async move {
             let _permit = permit; // held for the session lifetime
-            run_session(session, source, file_id, output_folder, env).await;
+            run_session(session, source, file_id, output_folder, preferred_mode, env).await;
         });
 
         Ok((id, SessionState::Created))

@@ -16,6 +16,19 @@ use tokio::io::AsyncReadExt;
 
 use crate::error::AppError;
 
+/// How video/audio are encoded into the HLS output.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Encode {
+    /// Stream copy (remux) — no re-encoding.
+    Copy,
+    /// Software H.264 + AAC.
+    Software,
+    /// Intel/AMD VA-API H.264 encode (render-node path).
+    Vaapi(String),
+    /// NVIDIA NVENC H.264 encode.
+    Nvenc,
+}
+
 pub struct HlsConfig {
     pub ffmpeg_path: String,
     /// Loopback source URL (seekable HTTP range) supplied by the source server.
@@ -23,6 +36,7 @@ pub struct HlsConfig {
     pub output_dir: PathBuf,
     /// Seek start in seconds (input `-ss`); `None` = start from the beginning.
     pub start_time_secs: Option<f64>,
+    pub encode: Encode,
 }
 
 /// Build the FFmpeg argument vector from config. Pure for testability.
@@ -34,26 +48,51 @@ fn build_args(config: &HlsConfig) -> Vec<String> {
         args.push(ss.to_string());
     }
 
+    if let Encode::Vaapi(device) = &config.encode {
+        args.push("-vaapi_device".to_string());
+        args.push(device.clone());
+    }
+
+    args.push("-i".to_string());
+    args.push(config.input_url.clone());
+
+    let codec_args: &[&str] = match &config.encode {
+        Encode::Copy => &["-c", "copy"],
+        Encode::Software => &["-c:v", "libx264", "-preset", "veryfast", "-c:a", "aac"],
+        Encode::Vaapi(_) => &[
+            "-vf",
+            "format=nv12,hwupload",
+            "-c:v",
+            "h264_vaapi",
+            "-c:a",
+            "aac",
+        ],
+        Encode::Nvenc => &["-c:v", "h264_nvenc", "-c:a", "aac"],
+    };
+    args.extend(codec_args.iter().map(|s| s.to_string()));
+
     let playlist = config.output_dir.join("out.m3u8");
     let segments = config.output_dir.join("seg_%03d.ts");
+    let segments_str = segments.to_string_lossy().into_owned();
+    let playlist_str = playlist.to_string_lossy().into_owned();
 
-    args.extend([
-        "-i".to_string(),
-        config.input_url.clone(),
-        "-c".to_string(),
-        "copy".to_string(),
-        "-f".to_string(),
-        "hls".to_string(),
-        "-hls_time".to_string(),
-        "2".to_string(),
-        "-hls_list_size".to_string(),
-        "0".to_string(),
-        "-hls_base_url".to_string(),
-        "segments/".to_string(),
-        "-hls_segment_filename".to_string(),
-        segments.to_string_lossy().into_owned(),
-        playlist.to_string_lossy().into_owned(),
-    ]);
+    args.extend(
+        [
+            "-f",
+            "hls",
+            "-hls_time",
+            "2",
+            "-hls_list_size",
+            "0",
+            "-hls_base_url",
+            "segments/",
+            "-hls_segment_filename",
+            &segments_str,
+            &playlist_str,
+        ]
+        .iter()
+        .map(|s| s.to_string()),
+    );
 
     args
 }
@@ -198,32 +237,52 @@ fn has_segment(dir: &Path) -> bool {
 mod tests {
     use super::*;
 
-    #[test]
-    fn args_include_input_output_and_copy() {
-        let cfg = HlsConfig {
+    fn cfg(encode: Encode) -> HlsConfig {
+        HlsConfig {
             ffmpeg_path: "ffmpeg".into(),
             input_url: "http://127.0.0.1:1234/stream/s1".into(),
             output_dir: "/tmp/sess".into(),
             start_time_secs: None,
-        };
-        let args = build_args(&cfg);
+            encode,
+        }
+    }
+
+    #[test]
+    fn copy_args() {
+        let args = build_args(&cfg(Encode::Copy));
         let joined = args.join(" ");
         assert!(joined.contains("-i http://127.0.0.1:1234/stream/s1"));
         assert!(joined.contains("-c copy"));
         assert!(joined.contains("-f hls"));
         assert!(joined.contains("/tmp/sess/out.m3u8"));
-        assert!(!joined.contains("-ss"));
+        assert!(!joined.contains("libx264"));
+    }
+
+    #[test]
+    fn software_transcode_args() {
+        let joined = build_args(&cfg(Encode::Software)).join(" ");
+        assert!(joined.contains("-c:v libx264"));
+        assert!(joined.contains("-c:a aac"));
+    }
+
+    #[test]
+    fn vaapi_transcode_args() {
+        let joined = build_args(&cfg(Encode::Vaapi("/dev/dri/renderD128".into()))).join(" ");
+        assert!(joined.contains("-vaapi_device /dev/dri/renderD128"));
+        assert!(joined.contains("-c:v h264_vaapi"));
+    }
+
+    #[test]
+    fn nvenc_transcode_args() {
+        let joined = build_args(&cfg(Encode::Nvenc)).join(" ");
+        assert!(joined.contains("-c:v h264_nvenc"));
     }
 
     #[test]
     fn seek_adds_ss_before_input() {
-        let cfg = HlsConfig {
-            ffmpeg_path: "ffmpeg".into(),
-            input_url: "http://x/".into(),
-            output_dir: "/tmp/sess".into(),
-            start_time_secs: Some(5.0),
-        };
-        let args = build_args(&cfg);
+        let mut c = cfg(Encode::Copy);
+        c.start_time_secs = Some(5.0);
+        let args = build_args(&c);
         let ss = args.iter().position(|a| a == "-ss").unwrap();
         let input = args.iter().position(|a| a == "-i").unwrap();
         assert!(ss < input, "-ss must precede -i for input seek");

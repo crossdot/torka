@@ -1,5 +1,6 @@
 //! Playback session lifecycle: state machine + orchestration (resolve torrent →
-//! register source → FFmpeg HLS → ready → cleanup), with idle-timeout expiry.
+//! register source → probe codecs → FFmpeg HLS (remux or transcode) → ready →
+//! cleanup), with idle-timeout expiry.
 
 use std::{
     path::PathBuf,
@@ -10,10 +11,12 @@ use std::{
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
-use crate::error::AppError;
+use crate::{config::HwAccelBackend, error::AppError};
 
 use super::{
-    ffmpeg::{FfmpegRunner, HlsConfig},
+    ffmpeg::{Encode, FfmpegRunner, HlsConfig},
+    plan::{PlaybackMode, select_mode},
+    probe::probe,
     source::SourceServer,
     torrent::{TorrentEngine, TorrentFile, TorrentSource},
 };
@@ -109,10 +112,13 @@ pub struct SessionEnv {
     pub engine: Arc<TorrentEngine>,
     pub source: Arc<SourceServer>,
     pub ffmpeg_path: String,
+    pub ffprobe_path: String,
     pub ready_timeout: Duration,
     pub resolve_timeout: Duration,
     /// Idle timeout after `ready`; `None` disables expiry.
     pub idle_timeout: Option<Duration>,
+    pub hwaccel_backend: HwAccelBackend,
+    pub hwaccel_device: Option<String>,
 }
 
 /// How a session ended (drives the terminal state).
@@ -129,11 +135,21 @@ pub async fn run_session(
     source: TorrentSource,
     file_id: Option<usize>,
     output_folder: Option<PathBuf>,
+    preferred_mode: Option<String>,
     env: SessionEnv,
 ) {
     let mut token: Option<String> = None;
 
-    let result = orchestrate(&session, source, file_id, output_folder, &env, &mut token).await;
+    let result = orchestrate(
+        &session,
+        source,
+        file_id,
+        output_folder,
+        preferred_mode.as_deref(),
+        &env,
+        &mut token,
+    )
+    .await;
 
     if let Some(t) = token {
         env.source.unregister(&t);
@@ -156,6 +172,7 @@ async fn orchestrate(
     source: TorrentSource,
     file_id: Option<usize>,
     output_folder: Option<PathBuf>,
+    preferred_mode: Option<&str>,
     env: &SessionEnv,
     token: &mut Option<String>,
 ) -> Result<SessionEnd, AppError> {
@@ -178,13 +195,26 @@ async fn orchestrate(
     let url = env.source.register(handle.clone(), file_id)?;
     *token = Some(url.rsplit('/').next().unwrap_or_default().to_string());
 
-    // Start FFmpeg -> HLS and wait for the first playable segment.
+    // Probe codecs and choose remux vs transcode.
     session.set_state(SessionState::Buffering).await;
+    let info = probe(&env.ffprobe_path, &url, env.resolve_timeout).await?;
+    let encode = match select_mode(
+        preferred_mode,
+        &info,
+        env.hwaccel_backend,
+        env.hwaccel_device.as_deref(),
+    )? {
+        PlaybackMode::Remux => Encode::Copy,
+        PlaybackMode::Transcode(e) => e,
+    };
+    tracing::debug!(session = %session.id, video = ?info.video_codec, audio = ?info.audio_codec, "playback mode selected");
+
     let cfg = HlsConfig {
         ffmpeg_path: env.ffmpeg_path.clone(),
         input_url: url,
         output_dir: session.dir.clone(),
         start_time_secs: None,
+        encode,
     };
     let mut ff = FfmpegRunner::start(&cfg)?;
 

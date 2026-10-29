@@ -26,7 +26,7 @@ async fn main() -> anyhow::Result<()> {
     let manager = StreamingManager::new(&config).await?;
 
     let source = TorrentSource::from_magnet(magnet)?;
-    let (id, _) = manager.create(source, None, None).await?;
+    let (id, _) = manager.create(source, None, None, None).await?;
     println!("session: {id}");
 
     let deadline = Instant::now() + Duration::from_secs(300);

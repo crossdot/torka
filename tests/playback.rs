@@ -76,6 +76,7 @@ async fn full_playback_lifecycle() {
             TorrentSource::Bytes(bytes),
             Some(0),
             Some(Path::new(root).to_path_buf()),
+            None,
         )
         .await
         .unwrap();
@@ -107,6 +108,101 @@ async fn full_playback_lifecycle() {
     .await;
     assert!(state.is_terminal());
     assert!(!Path::new(&format!("{root}/sessions/{id}")).exists());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore]
+async fn transcode_incompatible_source() {
+    let root = "/tmp/torka-pb-transcode";
+    let _ = std::fs::remove_dir_all(root);
+    std::fs::create_dir_all(root).unwrap();
+    let media = format!("{root}/test.mp4");
+
+    // 1. Generate a short MPEG-4 Part 2 video (not HLS-compatible -> must transcode).
+    let status = tokio::process::Command::new("ffmpeg")
+        .args([
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=duration=4:size=640x360:rate=25",
+            "-c:v",
+            "mpeg4",
+            "-q:v",
+            "5",
+            "-f",
+            "mp4",
+            &media,
+        ])
+        .status()
+        .await
+        .unwrap();
+    assert!(status.success());
+
+    // 2. Create a `.torrent`.
+    let seeder = Session::new(format!("{root}/seed").into()).await.unwrap();
+    let (ctor, _seed) = seeder
+        .create_and_serve_torrent(Path::new(&media), CreateTorrentOptions::default())
+        .await
+        .unwrap();
+    let bytes = ctor.as_bytes().unwrap().to_vec();
+
+    let config = Config {
+        cache_dir: format!("{root}/dl"),
+        session_dir: format!("{root}/sessions"),
+        ffmpeg_path: "ffmpeg".into(),
+        max_active_sessions: 2,
+        ffmpeg_start_timeout_secs: 60,
+        torrent_resolve_timeout_secs: 60,
+        ..Config::default()
+    };
+    let manager = StreamingManager::new(&config).await.unwrap();
+
+    // 3. Auto mode: mpeg4 is not HLS-compatible, so it must transcode to H.264.
+    let (id, _) = manager
+        .create(
+            TorrentSource::Bytes(bytes),
+            Some(0),
+            Some(Path::new(root).to_path_buf()),
+            None,
+        )
+        .await
+        .unwrap();
+
+    let state = wait_for(
+        &manager,
+        &id,
+        |s| s == SessionState::Ready,
+        Duration::from_secs(60),
+    )
+    .await;
+    assert_eq!(state, SessionState::Ready);
+
+    // 4. The produced segment must be H.264 (transcoded), not mpeg4.
+    let seg = manager.segment_path(&id, "seg_000.ts").unwrap();
+    let probe = tokio::process::Command::new("ffprobe")
+        .args([
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=codec_name",
+            "-of",
+            "default=nw=1:nk=1",
+            seg.to_str().unwrap(),
+        ])
+        .output()
+        .await
+        .unwrap();
+    assert!(probe.status.success());
+    let codec = String::from_utf8_lossy(&probe.stdout);
+    assert!(
+        codec.contains("h264") && !codec.contains("mpeg4"),
+        "unexpected segment codec: {codec:?}"
+    );
+
+    manager.stop(&id).await;
 }
 
 async fn wait_for(

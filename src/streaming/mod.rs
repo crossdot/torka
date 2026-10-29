@@ -1,6 +1,5 @@
 //! Streaming subsystem: torrent resolution, a seekable loopback source server,
-//! and the FFmpeg HLS runner. This is the engine proven by the Phase 0.5 spike
-//! (ADR-002), structured as reusable modules for the Phase 6 playback API.
+//! FFprobe inspection, playback planning, and the FFmpeg HLS runner.
 
 use tokio::io::{AsyncRead, AsyncSeek};
 
@@ -12,12 +11,16 @@ impl<T: AsyncRead + AsyncSeek + Send + Unpin> SeekableStream for T {}
 
 pub mod ffmpeg;
 pub mod manager;
+pub mod plan;
+pub mod probe;
 pub mod session;
 pub mod source;
 pub mod torrent;
 
-pub use ffmpeg::{FfmpegRunner, HlsConfig};
+pub use ffmpeg::{Encode, FfmpegRunner, HlsConfig};
 pub use manager::StreamingManager;
+pub use plan::PlaybackMode;
+pub use probe::StreamInfo;
 pub use session::SessionState;
 pub use source::SourceServer;
 pub use torrent::{TorrentEngine, TorrentFile, TorrentSource};

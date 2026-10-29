@@ -7,7 +7,7 @@ use std::{path::Path, time::Duration};
 
 use librqbit::{CreateTorrentOptions, Session};
 use movie_streamer::streaming::{
-    FfmpegRunner, HlsConfig, SourceServer, TorrentEngine, TorrentSource,
+    Encode, FfmpegRunner, HlsConfig, SourceServer, TorrentEngine, TorrentSource,
 };
 
 #[tokio::main]
@@ -79,6 +79,7 @@ async fn main() -> anyhow::Result<()> {
         input_url: url.clone(),
         output_dir: out.into(),
         start_time_secs: None,
+        encode: Encode::Copy,
     };
     let start = std::time::Instant::now();
     let mut ff = FfmpegRunner::start(&cfg)?;

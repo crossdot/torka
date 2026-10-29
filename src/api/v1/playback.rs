@@ -20,10 +20,8 @@ use crate::{
 struct CreatePlaybackRequest {
     source_id: String,
     file_id: Option<usize>,
-    /// Accepted for API compatibility; only remux is implemented (Phase 7 adds
-    /// transcode-mode selection).
+    /// Preferred playback mode: `auto` (default), `remux`, or `transcode`.
     #[serde(default)]
-    #[allow(dead_code)]
     preferred_mode: Option<String>,
 }
 
@@ -60,7 +58,10 @@ async fn create(
     let magnet = format!("magnet:?xt=urn:btih:{info_hash}");
     let source = TorrentSource::from_magnet(magnet)?;
 
-    let (session_id, state0) = state.streaming.create(source, req.file_id, None).await?;
+    let (session_id, state0) = state
+        .streaming
+        .create(source, req.file_id, None, req.preferred_mode)
+        .await?;
     let status_url = format!("/api/v1/playback/sessions/{session_id}");
 
     Ok((
