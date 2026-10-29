@@ -62,6 +62,7 @@ pub struct PlaybackSession {
     last_activity: Arc<Mutex<Instant>>,
     seek_tx: watch::Sender<Option<f64>>,
     seek_rx: watch::Receiver<Option<f64>>,
+    error: Arc<Mutex<Option<String>>>,
 }
 
 impl PlaybackSession {
@@ -75,6 +76,7 @@ impl PlaybackSession {
             last_activity: Arc::new(Mutex::new(Instant::now())),
             seek_tx,
             seek_rx,
+            error: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -115,6 +117,15 @@ impl PlaybackSession {
     /// `-ss` at that position (a new generation).
     pub fn seek(&self, position_secs: f64) {
         let _ = self.seek_tx.send(Some(position_secs));
+    }
+
+    /// Failure reason, if the session ended in `failed`.
+    pub async fn error(&self) -> Option<String> {
+        self.error.lock().await.clone()
+    }
+
+    async fn set_error(&self, msg: String) {
+        *self.error.lock().await = Some(msg);
     }
 }
 
@@ -172,6 +183,7 @@ pub async fn run_session(
         Ok(SessionEnd::Expired) => SessionState::Expired,
         Err(e) => {
             tracing::warn!(session = %session.id, error = %e, "playback failed");
+            session.set_error(e.to_string()).await;
             SessionState::Failed
         }
     };

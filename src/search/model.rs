@@ -18,6 +18,10 @@ pub struct TorrentResult {
     pub quality: Option<String>,
     pub languages: Vec<String>,
     pub source_url: Option<String>,
+    /// Full magnet URI (with trackers), used for playback. Internal only —
+    /// not part of the public search API.
+    #[serde(skip)]
+    pub magnet: Option<String>,
 }
 
 /// Per-provider outcome in a search response.

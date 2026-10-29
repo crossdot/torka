@@ -176,6 +176,7 @@ mod tests {
             quality: None,
             languages: vec![],
             source_url: None,
+            magnet: None,
         };
 
         let items = vec![

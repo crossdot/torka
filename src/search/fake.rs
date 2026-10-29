@@ -66,6 +66,7 @@ impl Provider for FakeProvider {
                 quality: Some("1080p".to_string()),
                 languages: vec!["ru".to_string(), "en".to_string()],
                 source_url: None,
+                magnet: None,
             },
             TorrentResult {
                 id: format!("{}-2", self.id),
@@ -80,6 +81,7 @@ impl Provider for FakeProvider {
                 quality: Some("720p".to_string()),
                 languages: vec![],
                 source_url: None,
+                magnet: None,
             },
         ])
     }

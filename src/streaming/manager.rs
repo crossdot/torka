@@ -134,6 +134,14 @@ impl StreamingManager {
         Some(session.state().await)
     }
 
+    /// Session state + failure reason (if any).
+    pub async fn status_with_error(&self, id: &str) -> Option<(SessionState, Option<String>)> {
+        let session = self.sessions.lock().await.get(id).cloned()?;
+        let state = session.state().await;
+        let error = session.error().await;
+        Some((state, error))
+    }
+
     /// Idempotent stop: signals cancellation and removes the session.
     pub async fn stop(&self, id: &str) {
         if let Some(session) = self.sessions.lock().await.get(id).cloned() {

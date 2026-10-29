@@ -46,7 +46,7 @@ async function poll(): Promise<void> {
       return;
     }
     if (s.status === 'failed' || s.status === 'expired' || s.status === 'stopped') {
-      error.value = `Воспроизведение не удалось: ${s.status}`;
+      error.value = s.error ?? `Воспроизведение не удалось: ${s.status}`;
       phase.value = 'error';
       return;
     }

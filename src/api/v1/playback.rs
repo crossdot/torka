@@ -36,6 +36,7 @@ struct CreatePlaybackResponse {
 struct SessionStatusResponse {
     session_id: String,
     status: String,
+    error: Option<String>,
 }
 
 pub fn router() -> Router<AppState> {
@@ -51,12 +52,11 @@ async fn create(
     State(state): State<AppState>,
     Json(req): Json<CreatePlaybackRequest>,
 ) -> ApiResult<(StatusCode, Json<CreatePlaybackResponse>)> {
-    // Resolve the opaque source_id to an info hash, then a magnet.
-    let info_hash = state
+    // Resolve the opaque source_id to the cached magnet (with trackers).
+    let magnet = state
         .cache
         .get(&req.source_id)
         .ok_or_else(|| AppError::validation("unknown source_id"))?;
-    let magnet = format!("magnet:?xt=urn:btih:{info_hash}");
     let source = TorrentSource::from_magnet(magnet)?;
 
     let (session_id, state0) = state
@@ -79,14 +79,15 @@ async fn status(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> ApiResult<Json<SessionStatusResponse>> {
-    let status = state
+    let (status, error) = state
         .streaming
-        .status(&id)
+        .status_with_error(&id)
         .await
         .ok_or_else(|| AppError::not_found("session not found"))?;
     Ok(Json(SessionStatusResponse {
         session_id: id,
         status: status.as_str().to_string(),
+        error,
     }))
 }
 

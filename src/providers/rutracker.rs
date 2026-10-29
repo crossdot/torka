@@ -98,6 +98,7 @@ fn parse_feed(xml: &str) -> Result<Vec<TorrentResult>, ProviderError> {
             quality: None,
             languages: vec![],
             source_url: topic.map(str::to_string),
+            magnet: magnet.map(str::to_string),
         });
     }
     Ok(out)

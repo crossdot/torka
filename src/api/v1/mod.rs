@@ -37,10 +37,11 @@ async fn source(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> ApiResult<Json<SourceDetails>> {
-    let info_hash = state
+    let magnet = state
         .cache
         .get(&id)
         .ok_or_else(|| AppError::not_found("source not found"))?;
+    let info_hash = crate::providers::magnet::magnet_info_hash(&magnet).unwrap_or_default();
     Ok(Json(SourceDetails {
         source_id: id,
         info_hash,
@@ -79,8 +80,14 @@ async fn search(
     let query = SearchQuery::normalize(params.q, params.year).map_err(AppError::validation)?;
     let response = state.search.search(&query).await;
     for item in &response.items {
-        if let Some(hash) = &item.info_hash {
-            state.cache.insert(item.id.clone(), hash.clone());
+        // Prefer the full magnet (with trackers); fall back to info-hash-only.
+        let magnet = item.magnet.clone().or_else(|| {
+            item.info_hash
+                .as_ref()
+                .map(|h| format!("magnet:?xt=urn:btih:{h}"))
+        });
+        if let Some(magnet) = magnet {
+            state.cache.insert(item.id.clone(), magnet);
         }
     }
     Ok(Json(response))

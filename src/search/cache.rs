@@ -1,4 +1,4 @@
-//! Opaque `source_id` → info-hash cache (SECURITY.md: validate opaque ids; the
+//! Opaque `source_id` → magnet-URI cache (SECURITY.md: validate opaque ids; the
 //! client must not be able to forge an arbitrary torrent source).
 
 use std::{
@@ -22,23 +22,23 @@ impl SearchCache {
         }
     }
 
-    /// Store `id -> info_hash`. Evicts expired entries when over the cap; if
+    /// Store `id -> magnet URI`. Evicts expired entries when over the cap; if
     /// still full, the new entry is dropped (basic, documented eviction).
-    pub fn insert(&self, id: String, info_hash: String) {
+    pub fn insert(&self, id: String, magnet: String) {
         let mut entries = self.entries.lock().unwrap();
         if entries.len() >= self.max_entries {
             entries.retain(|_, (_, at)| at.elapsed() < self.ttl);
         }
         if entries.len() < self.max_entries {
-            entries.insert(id, (info_hash, Instant::now()));
+            entries.insert(id, (magnet, Instant::now()));
         }
     }
 
-    /// Look up a live info hash by id (lazy TTL cleanup).
+    /// Look up a live magnet URI by id (lazy TTL cleanup).
     pub fn get(&self, id: &str) -> Option<String> {
         let mut entries = self.entries.lock().unwrap();
         match entries.get(id) {
-            Some((hash, at)) if at.elapsed() < self.ttl => Some(hash.clone()),
+            Some((magnet, at)) if at.elapsed() < self.ttl => Some(magnet.clone()),
             _ => {
                 entries.remove(id);
                 None

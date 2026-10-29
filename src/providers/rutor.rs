@@ -97,6 +97,7 @@ fn parse_search(html: &str) -> Result<Vec<TorrentResult>, ProviderError> {
             quality: None,
             languages: vec![],
             source_url: topic.map(|t| format!("https://rutor.info{t}")),
+            magnet: magnet_href.map(str::to_string),
         });
     }
     Ok(out)

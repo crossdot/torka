@@ -8,4 +8,5 @@ export interface CreatePlaybackResponse {
 export interface PlaybackStatus {
   readonly session_id: string;
   readonly status: string;
+  readonly error?: string | null;
 }
