@@ -46,6 +46,7 @@ docker build -t movie-streamer:0.1.0 .
 | `HWACCEL_DEVICE` | device-node бэкенда (пусто = авто) | `/dev/dri/renderD128` |
 | `MAX_ACTIVE_SESSIONS` | лимит одновременных сессий | 2 |
 | `STREAM_BUFFER_BYTES` | in-memory буфер стрима на torrent (LRU-вытеснение, без файлового кеша) | 1 GiB |
+| `HLS_WINDOW_SECS` | сколько секунд HLS-вывода держать на диске (скользящее окно, старые сегменты удаляются) | 300 |
 | `TORRENT_RESOLVE_TIMEOUT_SECS` | таймаут резолва magnet | 60 |
 
 ## Аутентификация (ADR-005)

@@ -72,6 +72,15 @@ function bufferedEnd(): number {
   return b.length > 0 ? b.end(b.length - 1) : 0;
 }
 
+function bufferedStart(): number {
+  const el = video.value;
+  if (el === null) {
+    return 0;
+  }
+  const b = el.buffered;
+  return b.length > 0 ? b.start(0) : 0;
+}
+
 /** Restart the pipeline at `positionSecs`, then reload the stream from there. */
 async function seekRemote(positionSecs: number): Promise<void> {
   if (sessionId === null || seeking) {
@@ -106,10 +115,10 @@ function onSeekChange(e: Event): void {
   if (el === null || sessionId === null || !Number.isFinite(target)) {
     return;
   }
-  // The current stream covers [seekBase, seekBase + bufferedEnd]. Anything
-  // outside it (forward beyond the buffer, or backward before the stream
-  // start) needs a pipeline restart.
-  const absStart = seekBase.value;
+  // Seekable without restart is the buffered range [start, end] in the current
+  // stream. Anything outside (forward or backward, e.g. past the HLS window)
+  // needs a pipeline restart.
+  const absStart = seekBase.value + bufferedStart();
   const absEnd = seekBase.value + bufferedEnd();
   if (target > absEnd + 1 || target < absStart) {
     void seekRemote(target);

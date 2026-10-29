@@ -168,6 +168,8 @@ pub struct SessionEnv {
     pub ffprobe_path: String,
     pub ready_timeout: Duration,
     pub resolve_timeout: Duration,
+    /// Number of HLS segments to keep on disk (sliding window).
+    pub hls_list_size: usize,
     /// Idle timeout after `ready`; `None` disables expiry.
     pub idle_timeout: Option<Duration>,
     pub hwaccel_backend: HwAccelBackend,
@@ -275,6 +277,7 @@ async fn orchestrate(
         output_dir: session.dir.clone(),
         start_time_secs: None,
         encode,
+        hls_list_size: env.hls_list_size,
     };
     let mut ff = FfmpegRunner::start(&cfg)?;
 

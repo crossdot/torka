@@ -56,6 +56,9 @@ pub struct Config {
     pub ffmpeg_path: String,
     pub ffprobe_path: String,
     pub ffmpeg_start_timeout_secs: u64,
+    /// How many seconds of HLS output to keep on disk (sliding window). Older
+    /// segments are deleted by FFmpeg (`-hls_flags delete_segments`).
+    pub hls_window_secs: u64,
     pub torrent_resolve_timeout_secs: u64,
     pub cache_dir: String,
     pub session_dir: String,
@@ -125,6 +128,7 @@ impl Config {
             ffmpeg_path: env_str("FFMPEG_PATH", "ffmpeg"),
             ffprobe_path: env_str("FFPROBE_PATH", "ffprobe"),
             ffmpeg_start_timeout_secs: env_parse("FFMPEG_START_TIMEOUT_SECS", 30u64)?,
+            hls_window_secs: env_parse("HLS_WINDOW_SECS", 300u64)?,
             torrent_resolve_timeout_secs: env_parse("TORRENT_RESOLVE_TIMEOUT_SECS", 60u64)?,
             cache_dir: env_str("CACHE_DIR", "/cache"),
             session_dir: env_str("SESSION_DIR", "/cache/sessions"),
@@ -171,6 +175,7 @@ impl Default for Config {
             ffmpeg_path: "ffmpeg".into(),
             ffprobe_path: "ffprobe".into(),
             ffmpeg_start_timeout_secs: 30,
+            hls_window_secs: 300,
             torrent_resolve_timeout_secs: 60,
             cache_dir: "/cache".into(),
             session_dir: "/cache/sessions".into(),

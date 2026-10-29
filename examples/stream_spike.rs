@@ -80,6 +80,7 @@ async fn main() -> anyhow::Result<()> {
         output_dir: out.into(),
         start_time_secs: None,
         encode: Encode::Copy,
+        hls_list_size: 5,
     };
     let start = std::time::Instant::now();
     let mut ff = FfmpegRunner::start(&cfg)?;

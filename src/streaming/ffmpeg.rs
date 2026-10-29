@@ -38,6 +38,8 @@ pub struct HlsConfig {
     /// Seek start in seconds (input `-ss`); `None` = start from the beginning.
     pub start_time_secs: Option<f64>,
     pub encode: Encode,
+    /// Number of HLS segments to keep (sliding window; older ones deleted).
+    pub hls_list_size: usize,
 }
 
 /// Build the FFmpeg argument vector from config. Pure for testability.
@@ -83,6 +85,7 @@ fn build_args(config: &HlsConfig) -> Vec<String> {
     let segments = config.output_dir.join("seg_%03d.ts");
     let segments_str = segments.to_string_lossy().into_owned();
     let playlist_str = playlist.to_string_lossy().into_owned();
+    let hls_list_size = config.hls_list_size.to_string();
 
     args.extend(
         [
@@ -91,9 +94,9 @@ fn build_args(config: &HlsConfig) -> Vec<String> {
             "-hls_time",
             "2",
             "-hls_list_size",
-            "0",
-            "-hls_playlist_type",
-            "event",
+            &hls_list_size,
+            "-hls_flags",
+            "delete_segments",
             "-hls_base_url",
             "segments/",
             "-hls_segment_filename",
@@ -258,6 +261,7 @@ mod tests {
             output_dir: "/tmp/sess".into(),
             start_time_secs: None,
             encode,
+            hls_list_size: 5,
         }
     }
 

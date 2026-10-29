@@ -25,6 +25,7 @@ pub struct StreamingManager {
     limit: Arc<Semaphore>,
     ready_timeout: Duration,
     resolve_timeout: Duration,
+    hls_list_size: usize,
     idle_timeout: Option<Duration>,
     ffmpeg_path: String,
     ffprobe_path: String,
@@ -50,6 +51,7 @@ impl StreamingManager {
             limit: Arc::new(Semaphore::new(config.max_active_sessions.max(1))),
             ready_timeout: Duration::from_secs(config.ffmpeg_start_timeout_secs),
             resolve_timeout: Duration::from_secs(config.torrent_resolve_timeout_secs),
+            hls_list_size: (config.hls_window_secs.max(1)).div_ceil(2) as usize,
             idle_timeout: (config.session_idle_timeout_secs > 0)
                 .then(|| Duration::from_secs(config.session_idle_timeout_secs)),
             ffmpeg_path: config.ffmpeg_path.clone(),
@@ -96,6 +98,7 @@ impl StreamingManager {
             ffprobe_path: self.ffprobe_path.clone(),
             ready_timeout: self.ready_timeout,
             resolve_timeout: self.resolve_timeout,
+            hls_list_size: self.hls_list_size,
             idle_timeout: self.idle_timeout,
             hwaccel_backend: self.hwaccel_backend,
             hwaccel_device: self.hwaccel_device.clone(),
