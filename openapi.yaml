@@ -184,7 +184,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PlaybackSession"
+                $ref: "#/components/schemas/PlaybackSessionCreated"
               example:
                 session_id: opaque-session-id
                 status: resolving
@@ -212,11 +212,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PlaybackSession"
+                $ref: "#/components/schemas/PlaybackSessionStatus"
               example:
                 session_id: opaque-session-id
                 status: ready
-                status_url: /api/v1/playback/sessions/opaque-session-id
+                error: null
+                duration_secs: 2694.8
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
@@ -235,14 +236,6 @@ paths:
       responses:
         "202":
           description: Stop requested; the session releases resources asynchronously.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PlaybackSession"
-              example:
-                session_id: opaque-session-id
-                status: stopping
-                status_url: /api/v1/playback/sessions/opaque-session-id
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
@@ -581,9 +574,9 @@ components:
         - stopped
         - failed
         - expired
-    PlaybackSession:
+    PlaybackSessionCreated:
       type: object
-      description: Playback session reference and current status.
+      description: Response to creating a session (`202 Accepted`).
       required: [session_id, status, status_url]
       properties:
         session_id:
@@ -595,6 +588,23 @@ components:
           description: |
             URL for polling session status; identical to
             `GET /api/v1/playback/sessions/{id}`.
+    PlaybackSessionStatus:
+      type: object
+      description: Current playback session state.
+      required: [session_id, status]
+      properties:
+        session_id:
+          type: string
+        status:
+          $ref: "#/components/schemas/SessionState"
+        error:
+          type: string
+          nullable: true
+          description: Failure reason, present when the session is `failed`.
+        duration_secs:
+          type: number
+          nullable: true
+          description: Total media duration in seconds, when probed by ffprobe.
     CreatePlaybackSessionRequest:
       type: object
       required: [source_id]
