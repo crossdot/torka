@@ -1,34 +1,26 @@
 pub mod health;
+pub mod v1;
 
 use std::path::Path;
 
-use axum::{Router, extract::State, routing::get};
+use axum::{Router, routing::get};
 use tower_http::{
     services::{ServeDir, ServeFile},
     trace::TraceLayer,
 };
 
-use crate::{config::Config, error::AppError};
+use crate::state::AppState;
 
-/// Builds the application router. `Config` is the shared state (Clone + Send + Sync).
-pub fn router(config: Config) -> Router {
+/// Builds the application router. `AppState` is the shared state (Clone + Send + Sync).
+pub fn router(state: AppState) -> Router {
+    let spa = spa(&state.config.static_dir);
     Router::new()
         .route("/health", get(health::health))
         .route("/ready", get(health::ready))
-        .nest("/api/v1", api_v1())
-        .fallback_service(spa(&config.static_dir))
+        .nest("/api/v1", v1::router())
+        .fallback_service(spa)
         .layer(TraceLayer::new_for_http())
-        .with_state(config)
-}
-
-/// `/api/v1` scope. Phase 2 adds search/session routes here; until then every
-/// unmatched `/api/v1/*` path returns the unified JSON 404 (never the SPA).
-fn api_v1() -> Router<Config> {
-    Router::new().fallback(api_not_found)
-}
-
-async fn api_not_found(_state: State<Config>) -> AppError {
-    AppError::not_found("route not found")
+        .with_state(state)
 }
 
 /// Serves the built Vue SPA; unknown non-API paths fall back to `index.html`.

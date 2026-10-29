@@ -25,6 +25,8 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 tower-http = { version = "0.7.1", features = ["trace", "fs"] }
 librqbit = "9.0.1"
 tokio-util = { version = "0.7", features = ["io"] }
+futures-util = "0.3"
 
 [dev-dependencies]
 anyhow = "1"
+tower = { version = "0.5.3", features = ["util"] }

@@ -52,6 +52,9 @@ pub struct Config {
     pub cache_max_bytes: u64,
     pub max_active_sessions: usize,
     pub session_idle_timeout_secs: u64,
+    pub search_timeout_secs: u64,
+    pub search_max_parallel: usize,
+    pub provider_fake_enabled: bool,
 }
 
 fn env_str(key: &str, default: &str) -> String {
@@ -96,6 +99,9 @@ impl Config {
             cache_max_bytes: env_parse("CACHE_MAX_BYTES", 2_147_483_648u64)?,
             max_active_sessions: env_parse("MAX_ACTIVE_SESSIONS", 2usize)?,
             session_idle_timeout_secs: env_parse("SESSION_IDLE_TIMEOUT_SECS", 900u64)?,
+            search_timeout_secs: env_parse("SEARCH_TIMEOUT_SECS", 8u64)?,
+            search_max_parallel: env_parse("SEARCH_MAX_PARALLEL", 4usize)?,
+            provider_fake_enabled: env_parse("PROVIDER_FAKE_ENABLED", false)?,
         })
     }
 
@@ -103,5 +109,30 @@ impl Config {
         format!("{}:{}", self.host, self.port)
             .parse()
             .map_err(|e| format!("invalid bind address {}:{}: {e}", self.host, self.port))
+    }
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            host: "0.0.0.0".into(),
+            port: 8080,
+            rust_log: "info".into(),
+            api_token: None,
+            hwaccel_backend: HwAccelBackend::Auto,
+            hwaccel_device: None,
+            hwaccel_required: false,
+            ffmpeg_path: "ffmpeg".into(),
+            ffprobe_path: "ffprobe".into(),
+            cache_dir: "/cache".into(),
+            session_dir: "/cache/sessions".into(),
+            static_dir: "frontend/dist".into(),
+            cache_max_bytes: 2_147_483_648,
+            max_active_sessions: 2,
+            session_idle_timeout_secs: 900,
+            search_timeout_secs: 8,
+            search_max_parallel: 4,
+            provider_fake_enabled: false,
+        }
     }
 }

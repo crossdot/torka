@@ -1,4 +1,12 @@
-use movie_streamer::{api, config::Config, error::AppError};
+use std::{sync::Arc, time::Duration};
+
+use movie_streamer::{
+    api,
+    config::Config,
+    error::AppError,
+    search::{ProviderRegistry, SearchService},
+    state::AppState,
+};
 
 #[tokio::main]
 async fn main() -> Result<(), AppError> {
@@ -18,7 +26,15 @@ async fn main() -> Result<(), AppError> {
         std::process::exit(1);
     });
 
-    let app = api::router(config);
+    let registry = ProviderRegistry::from_config(&config);
+    let search = Arc::new(SearchService::new(
+        registry,
+        Duration::from_secs(config.search_timeout_secs),
+        config.search_max_parallel,
+    ));
+    let state = AppState { config, search };
+
+    let app = api::router(state);
 
     let listener = tokio::net::TcpListener::bind(addr)
         .await

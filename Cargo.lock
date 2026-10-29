@@ -1729,11 +1729,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "futures-util",
  "librqbit",
  "serde",
  "serde_json",
  "tokio",
  "tokio-util",
+ "tower",
  "tower-http 0.7.1",
  "tracing",
  "tracing-subscriber",

@@ -1,7 +1,7 @@
 use axum::{Json, extract::State};
 use serde::Serialize;
 
-use crate::{config::Config, error::ApiResult};
+use crate::{error::ApiResult, state::AppState};
 
 #[derive(Debug, Serialize)]
 pub struct HealthResponse {
@@ -10,7 +10,7 @@ pub struct HealthResponse {
 }
 
 /// Liveness: the process is up and able to serve requests.
-pub async fn health(State(_config): State<Config>) -> ApiResult<Json<HealthResponse>> {
+pub async fn health(State(_state): State<AppState>) -> ApiResult<Json<HealthResponse>> {
     Ok(Json(HealthResponse {
         status: "ok",
         version: env!("CARGO_PKG_VERSION"),
@@ -20,7 +20,7 @@ pub async fn health(State(_config): State<Config>) -> ApiResult<Json<HealthRespo
 /// Readiness: mandatory components are ready. Phase 1 has no external
 /// dependencies, so readiness is currently unconditional and does not depend on
 /// any external site (per API.md).
-pub async fn ready(State(_config): State<Config>) -> ApiResult<Json<HealthResponse>> {
+pub async fn ready(State(_state): State<AppState>) -> ApiResult<Json<HealthResponse>> {
     Ok(Json(HealthResponse {
         status: "ready",
         version: env!("CARGO_PKG_VERSION"),
