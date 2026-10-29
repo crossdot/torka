@@ -1,28 +1,59 @@
-# Movie Streamer — пакет спецификации для агента
+# torka — self-hosted movie streamer
 
-Версия: 0.1.0. Статус: стартовая спецификация; перед реализацией нужен Discovery/ADR-этап.
+Самохостимый сервис: поиск torrent-источников (RuTracker feed, Rutor) и потоковое
+HLS-воспроизведение без предварительной загрузки. Rust (Axum/Tokio) + Vue 3 + FFmpeg +
+librqbit; один Docker-контейнер для Synology и любого Linux-хоста.
 
-## Использование
-1. Передайте архив агенту Oh My Pi.
-2. Сначала прочитать `AGENT.md`, `PRODUCT.md`, `ARCHITECTURE.md`, `API.md`, `IMPLEMENTATION_PLAN.md`.
-3. Сначала проверить зависимости, лицензии, целевую архитектуру Synology, torrent engine и допустимые способы интеграции RuTracker/Rutor.
-4. Не выдумывать HTML-структуру, API или доступность сайтов. Не обходить CAPTCHA, авторизацию или технические ограничения.
-5. Использовать собственный или иной явно разрешённый тестовый контент для PoC.
+## Возможности
 
-## Файлы
-- `PRODUCT.md` — продуктовые цели и границы.
-- `AGENT.md` — правила автономного агента.
-- `ARCHITECTURE.md` — модули и потоки данных.
-- `API.md` — предварительный HTTP API.
-- `WEB_UI.md` — веб-интерфейс.
-- `CLIENTS.md` — веб, Android TV и другие клиенты.
-- `PROVIDERS.md` — RuTracker/Rutor и провайдерная архитектура.
-- `STREAMING.md` — torrent, FFmpeg и HLS.
-- `DOCKER_SYNOLOGY.md` — Docker/DSM.
-- `SECURITY.md` — безопасность.
-- `TESTING.md` — тестовая стратегия.
-- `IMPLEMENTATION_PLAN.md` — фазы реализации.
-- `DECISIONS.md` — исходные решения и открытые вопросы.
-- `TASKS.md` — рабочий чек-лист.
-- `ENV.example`, `compose.yaml.example` — примеры конфигурации.
-- `ADR_TEMPLATE.md`, `GLOSSARY.md`, `examples/` — вспомогательные материалы.
+- Поиск по провайдерам: Rutor (HTML-поиск), RuTracker (Atom-feed последних раздач),
+  фейковый провайдер для тестов. Частичные результаты при сбое провайдера.
+- Воспроизведение `magnet` → HLS с перемоткой (seekable loopback source + FFmpeg
+  remux, без полной загрузки файла).
+- Vendor-agnostic аппаратное ускорение (Intel/AMD VA-API, NVIDIA NVENC) + software fallback.
+- Единый клиент-независимый API (`/api/v1`) + Vue-UI.
+
+## Быстрый старт
+
+```bash
+cp ENV.example .env      # задайте APP_API_TOKEN
+install -d -o 10001 -g 10001 ./cache
+docker compose up -d --build
+# http://localhost:8080
+```
+
+Подробная инструкция (в т.ч. Synology Container Manager, VA-API, upgrade) — в
+[`DEPLOYMENT.md`](DEPLOYMENT.md).
+
+## Разработка
+
+```bash
+# backend
+cargo run                       # см. ENV.example (PROVIDER_*_ENABLED, ...)
+
+# frontend
+cd frontend && npm install && npm run dev
+```
+
+Проверки:
+
+- Backend: `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`,
+  `cargo test`.
+- Интеграционный playback-тест (нужен ffmpeg): `cargo test --test playback -- --ignored`.
+- Frontend: `npm run lint`, `npm run format:check`, `npm run typecheck`, `npm test`,
+  `npm run build`.
+
+## Документация
+
+- [`DEPLOYMENT.md`](DEPLOYMENT.md) — развёртывание (Docker/Synology).
+- [`adr/`](adr/) — архитектурные решения (ADR-001…008).
+- [`DISCOVERY.md`](DISCOVERY.md) — результаты Discovery (библиотеки, лицензии, провайдеры).
+- [`PRODUCT.md`](PRODUCT.md), [`ARCHITECTURE.md`](ARCHITECTURE.md), [`API.md`](API.md),
+  [`SECURITY.md`](SECURITY.md), [`STREAMING.md`](STREAMING.md), [`WEB_UI.md`](WEB_UI.md).
+
+## Статус
+
+Реализовано (Phases 0–7 + закрытые зазоры): поиск, провайдеры, streaming, playback API,
+плеер, аутентификация, idle-timeout, graceful shutdown, Docker-образ. Известные
+ограничения: транскод (`preferred_mode`) не реализован (только remux), `arm64` и
+реальный VA-API требуют проверки на железе.

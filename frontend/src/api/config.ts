@@ -13,14 +13,29 @@ const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim() || DEFAULT_A
 /** Versioned API base, e.g. `/api/v1` or `https://host/api/v1`. */
 export const API_BASE_URL: string = configuredBaseUrl.replace(/\/+$/, '');
 
-/** Bearer token for `/api/*`; empty when the build has no token configured. */
-export const API_TOKEN: string = import.meta.env.VITE_API_TOKEN?.trim() ?? '';
+const TOKEN_STORAGE_KEY = 'api_token';
+const buildToken = import.meta.env.VITE_API_TOKEN?.trim() ?? '';
+
+/** Runtime bearer token: sessionStorage override, else the build-time default. */
+export function getApiToken(): string {
+  const stored =
+    typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(TOKEN_STORAGE_KEY) : null;
+  return (stored ?? buildToken).trim();
+}
+
+export function setApiToken(token: string): void {
+  sessionStorage.setItem(TOKEN_STORAGE_KEY, token.trim());
+}
+
+export function clearApiToken(): void {
+  sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+}
 
 /** Health/readiness are public and live outside the versioned API prefix. */
 const ROOT_BASE_URL: string = API_BASE_URL.replace(/\/api\/v1$/i, '');
 
 export function hasApiToken(): boolean {
-  return API_TOKEN.length > 0;
+  return getApiToken().length > 0;
 }
 
 /** Absolute path for a versioned API resource. */

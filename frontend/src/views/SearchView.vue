@@ -41,8 +41,8 @@ function onSelect(item: SearchItem): void {
     </header>
 
     <p v-if="tokenMissing" class="alert alert--warning" role="status">
-      API-токен не задан: переменная <code>VITE_API_TOKEN</code> пуста, поэтому поиск вернёт ошибку
-      конфигурации.
+      API-токен не задан. Если сервер требует авторизацию, запросы вернут 401 — задайте токен в
+      шапке.
     </p>
 
     <SearchForm :loading="isLoading" @submit="onSubmit" />

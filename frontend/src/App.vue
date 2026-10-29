@@ -2,6 +2,7 @@
 import { RouterLink, RouterView } from 'vue-router';
 
 import HealthIndicator from '@/components/HealthIndicator.vue';
+import TokenForm from '@/components/TokenForm.vue';
 </script>
 
 <template>
@@ -12,6 +13,7 @@ import HealthIndicator from '@/components/HealthIndicator.vue';
         <RouterLink to="/">Поиск</RouterLink>
         <RouterLink to="/diagnostics">Диагностика</RouterLink>
       </nav>
+      <TokenForm />
       <HealthIndicator />
     </header>
 

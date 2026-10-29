@@ -19,7 +19,7 @@
 
 ARG RUST_IMAGE=rust:1.99.0-slim@sha256:2752b332db73fdbb7dc576f06c82ed1f312005784ef913d7e04a28f5f55dc581
 ARG RUNTIME_IMAGE=debian:trixie-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4
-ARG NODE_IMAGE=node:26-alpine
+ARG NODE_IMAGE=node:26-alpine@sha256:c6ad9e9c1d80f6eb607c26b4b0a132ff7a2344fad1c78ea3baa2a7d4c8de6d94
 
 # ---------------------------------------------------------------------------
 # Stage 1: build the Rust crate (release profile, trixie -> glibc matched with runtime).
@@ -96,6 +96,8 @@ ENV APP_HOST=0.0.0.0 \
 # `ffmpeg` ships the GPL build that also provides `ffprobe` (ADR-006: GPL build is
 # accepted, so software H.264 via libx264 is available). `libva2`/`vainfo` provide
 # the VA-API runtime and its diagnostic tool. `curl` exists only for HEALTHCHECK.
+# `ca-certificates` provides the CA store for the torrent engine's HTTPS client and
+# provider fetches (without it reqwest/native-tls cannot build its HTTP client).
 # The Intel media driver lives in `non-free` and is amd64-only, hence the guard;
 # arm64 hosts (no Intel iGPU) keep the software path.
 RUN sed -i 's/^Components: main$/Components: main non-free non-free-firmware/' \
@@ -106,6 +108,7 @@ RUN sed -i 's/^Components: main$/Components: main non-free non-free-firmware/' \
         libva2="${LIBVA2_VERSION}" \
         vainfo="${VAINFO_VERSION}" \
         curl="${CURL_VERSION}" \
+        ca-certificates \
  && if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
         apt-get install -y --no-install-recommends \
             intel-media-va-driver-non-free="${INTEL_MEDIA_VERSION}"; \

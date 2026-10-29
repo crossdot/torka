@@ -9,7 +9,7 @@
  * - surface aborts unchanged so callers can ignore superseded requests.
  */
 
-import { API_TOKEN } from './config';
+import { getApiToken } from './config';
 import type { ApiErrorDetail } from '@/types';
 
 /**
@@ -94,10 +94,10 @@ export async function requestJson<T>(url: string, options: RequestOptions = {}):
   const headers = new Headers({ Accept: 'application/json' });
 
   if (options.auth !== false) {
-    if (API_TOKEN.length === 0) {
-      throw new ApiError('CLIENT_MISSING_TOKEN', 'API-токен не настроен: задайте VITE_API_TOKEN.');
+    const token = getApiToken();
+    if (token.length > 0) {
+      headers.set('Authorization', `Bearer ${token}`);
     }
-    headers.set('Authorization', `Bearer ${API_TOKEN}`);
   }
 
   if (options.body !== undefined) {

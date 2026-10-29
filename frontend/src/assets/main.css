@@ -580,3 +580,22 @@ a {
   background: #000;
   border-radius: var(--radius);
 }
+
+.token {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.token__input {
+  width: 9rem;
+  padding: 0.35rem 0.5rem;
+  color: var(--text);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.token__saved {
+  color: var(--ok);
+}
