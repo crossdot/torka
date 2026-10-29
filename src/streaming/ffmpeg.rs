@@ -141,6 +141,10 @@ impl FfmpegRunner {
     /// Spawn FFmpeg producing HLS into `config.output_dir`.
     pub fn start(config: &HlsConfig) -> Result<Self, AppError> {
         let args = build_args(config);
+        tracing::info!(
+            cmd = %format!("{} {}", config.ffmpeg_path, args.join(" ")),
+            "starting ffmpeg"
+        );
         let mut child = tokio::process::Command::new(&config.ffmpeg_path)
             .args(&args)
             .stdout(std::process::Stdio::null())
