@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import Hls from 'hls.js';
 import { RouterLink, useRoute } from 'vue-router';
 
@@ -21,24 +21,19 @@ const phase = ref<Phase>('loading');
 const loadingMessage = ref('Подготовка потока…');
 const error = ref<string | null>(null);
 
+const durationSecs = ref<number | null>(null);
+const currentTime = ref(0);
+const playing = ref(false);
+/** Absolute timeline offset of the current FFmpeg run (0 until a forward seek). */
+const seekBase = ref(0);
+
+const absolutePosition = computed(() => seekBase.value + currentTime.value);
+
 let sessionId: string | null = null;
 let hls: Hls | null = null;
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
 let stopped = false;
-let durationSecs: number | null = null;
 let seeking = false;
-
-/** Pin the seekbar to the known total duration (the playlist is still growing). */
-function applyKnownDuration(): void {
-  if (hls === null || durationSecs === null) {
-    return;
-  }
-  for (const level of hls.levels) {
-    if (level.details) {
-      level.details.totalduration = durationSecs;
-    }
-  }
-}
 
 function setupHls(url: string): void {
   const el = video.value;
@@ -52,8 +47,6 @@ function setupHls(url: string): void {
     hls = new Hls();
     hls.loadSource(url);
     hls.attachMedia(el);
-    hls.on(Hls.Events.MANIFEST_PARSED, applyKnownDuration);
-    hls.on(Hls.Events.LEVEL_UPDATED, applyKnownDuration);
     hls.on(Hls.Events.ERROR, (_event, data) => {
       if (data.fatal) {
         error.value = 'Ошибка воспроизведения потока.';
@@ -89,6 +82,8 @@ async function seekRemote(positionSecs: number): Promise<void> {
   } finally {
     seeking = false;
   }
+  seekBase.value = positionSecs;
+  currentTime.value = 0;
   if (hls !== null) {
     hls.destroy();
     hls = null;
@@ -96,20 +91,48 @@ async function seekRemote(positionSecs: number): Promise<void> {
   setupHls(playlistUrl(sessionId));
 }
 
-/** Forward seek beyond the buffered range needs a pipeline restart. */
-function onSeeking(): void {
-  if (seeking) {
-    return;
-  }
+function onSeekInput(e: Event): void {
+  const target = parseFloat((e.target as HTMLInputElement).value);
   const el = video.value;
-  if (el === null || sessionId === null) {
+  if (el === null || sessionId === null || !Number.isFinite(target)) {
     return;
   }
-  const target = el.currentTime;
-  const end = bufferedEnd();
-  if (end > 0 && target > end + 1) {
+  // Beyond the buffered range (forward) -> restart the pipeline there.
+  const absBufferedEnd = seekBase.value + bufferedEnd();
+  if (absBufferedEnd > 0 && target > absBufferedEnd + 1) {
     void seekRemote(target);
+  } else {
+    el.currentTime = Math.max(0, target - seekBase.value);
   }
+}
+
+function onTimeUpdate(): void {
+  const el = video.value;
+  if (el !== null) {
+    currentTime.value = el.currentTime;
+  }
+}
+
+function togglePlay(): void {
+  const el = video.value;
+  if (el === null) {
+    return;
+  }
+  if (el.paused) {
+    void el.play();
+  } else {
+    el.pause();
+  }
+}
+
+function formatTime(secs: number): string {
+  const s = Math.max(0, Math.floor(secs));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const ss = s % 60;
+  const mm = String(m).padStart(2, '0');
+  const sss = String(ss).padStart(2, '0');
+  return h > 0 ? `${h}:${mm}:${sss}` : `${m}:${sss}`;
 }
 
 async function start(): Promise<void> {
@@ -129,7 +152,7 @@ async function poll(): Promise<void> {
   try {
     const s = await getPlaybackStatus(sessionId);
     if (s.status === 'ready' || s.status === 'playing') {
-      durationSecs = s.duration_secs ?? null;
+      durationSecs.value = s.duration_secs ?? null;
       play(playlistUrl(sessionId));
       return;
     }
@@ -147,10 +170,6 @@ async function poll(): Promise<void> {
 
 function play(url: string): void {
   phase.value = 'ready';
-  const el = video.value;
-  if (el !== null) {
-    el.addEventListener('seeking', onSeeking);
-  }
   setupHls(url);
 }
 
@@ -172,7 +191,6 @@ async function stop(): Promise<void> {
     hls.destroy();
     hls = null;
   }
-  video.value?.removeEventListener('seeking', onSeeking);
   if (sessionId !== null) {
     const id = sessionId;
     sessionId = null;
@@ -209,13 +227,58 @@ onBeforeUnmount(() => {
       <RouterLink class="button" to="/">Назад к поиску</RouterLink>
     </div>
 
-    <video
-      v-show="phase === 'ready'"
-      ref="video"
-      class="player"
-      controls
-      autoplay
-      playsinline
-    ></video>
+    <template v-else>
+      <video
+        ref="video"
+        class="player"
+        autoplay
+        playsinline
+        @timeupdate="onTimeUpdate"
+        @play="playing = true"
+        @pause="playing = false"
+      ></video>
+
+      <div class="controls">
+        <button class="controls__play" type="button" @click="togglePlay">
+          {{ playing ? '⏸' : '▶' }}
+        </button>
+        <input
+          class="controls__seek"
+          type="range"
+          :min="0"
+          :max="durationSecs ?? 0"
+          :value="absolutePosition"
+          step="1"
+          aria-label="Позиция"
+          @input="onSeekInput"
+        />
+        <span class="controls__time">
+          {{ formatTime(absolutePosition) }} / {{ formatTime(durationSecs ?? 0) }}
+        </span>
+      </div>
+    </template>
   </section>
 </template>
+
+<style scoped>
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+.controls__play {
+  width: 2.5rem;
+  height: 2.5rem;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.controls__seek {
+  flex: 1;
+}
+.controls__time {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+</style>

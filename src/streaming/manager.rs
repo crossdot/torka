@@ -152,12 +152,6 @@ impl StreamingManager {
         Some((state, error, duration))
     }
 
-    /// Absolute timeline offset of the current FFmpeg run (0 until a seek).
-    pub async fn seek_offset(&self, id: &str) -> Option<f64> {
-        let session = self.sessions.lock().await.get(id).cloned()?;
-        Some(session.seek_offset().await)
-    }
-
     /// Idempotent stop: signals cancellation and removes the session.
     pub async fn stop(&self, id: &str) {
         if let Some(session) = self.sessions.lock().await.get(id).cloned() {

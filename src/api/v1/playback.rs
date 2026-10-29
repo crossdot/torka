@@ -136,22 +136,9 @@ async fn master_playlist(
         .streaming
         .playlist_path(&id)
         .ok_or_else(|| AppError::not_found("playlist not found"))?;
-    let mut text = tokio::fs::read_to_string(&path)
+    let bytes = tokio::fs::read(&path)
         .await
         .map_err(|e| AppError::internal(format!("read playlist: {e}")))?;
-
-    // After a seek the FFmpeg run restarts at timeline position 0; inject
-    // #EXT-X-START so the player resumes/seekbar reflects the absolute offset.
-    if let Some(offset) = state.streaming.seek_offset(&id).await {
-        if offset > 0.0 {
-            let tag = format!("#EXT-X-START:TIME-OFFSET={offset}");
-            if let Some(pos) = text.find("#EXTM3U") {
-                let insert_at = pos + "#EXTM3U".len();
-                text.insert_str(insert_at, &format!("\n{tag}"));
-            }
-        }
-    }
-    let bytes = text.into_bytes();
 
     // Backend signal of playback start (STREAMING.md §8: `playing` is a
     // documented backend-observed event, not proof of client decoding).
