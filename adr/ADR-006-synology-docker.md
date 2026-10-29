@@ -29,9 +29,10 @@ Docker-образ должен работать на Synology DSM через Con
 2. **Runtime base `debian:trixie-slim`** (version-tagged): FFmpeg 7.1.5, `libva2`,
    `vainfo`; при VA-API — `intel-media-va-driver-non-free` (полная сборка, из `non-free`).
    Rust-бинарь собирается **glibc в том же trixie** (builder `rust:1.99-slim` + runtime
-   `debian:trixie-slim`). Deviation от исходного плана (static musl): `librqbit` →
-   `openssl-sys` требует vendored OpenSSL для `*-musl`, поэтому остановились на
-   согласованной glibc-версии builder==runtime (зафиксировано в `Dockerfile`).
+   `debian:trixie-slim`). Deviation от исходного плана (static musl): TLS/крипто-стек
+   (`aws-lc-sys`, ранее `openssl-sys`) требует нативных sys-крейтов и вендоринга для
+   `*-musl`, поэтому остановились на согласованной glibc-версии builder==runtime
+   (зафиксировано в `Dockerfile`).
 3. **Сборка в CI** (buildx + QEMU, `--push`), не на NAS; на 512 МБ–2 ГБ ARM сборка невозможна.
 4. **Runtime-детект VA-API**: probe `/dev/dri/renderD*`, затем реальная инициализация и
    тестовый encode; `HWACCEL_MODE=auto` → software fallback. 512 МБ–1 ГБ модели отметить

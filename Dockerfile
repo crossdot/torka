@@ -24,10 +24,11 @@ ARG NODE_IMAGE=node:26-alpine
 FROM ${RUST_IMAGE} AS builder
 
 # Native build dependencies for the crate graph:
-#   * build-essential/pkg-config/libssl-dev - `openssl-sys` (via `librqbit`);
+#   * build-essential/pkg-config - C toolchain + pkg-config;
 #   * cmake/perl - `aws-lc-sys` (rustls crypto provider);
 #   * libclang-dev - bindgen, used by the TLS/crypto sys crates.
-ARG BUILD_DEPS="build-essential cmake pkg-config libssl-dev perl libclang-dev"
+# (No OpenSSL: librqbit uses `rust-tls` = rustls + aws-lc-rs.)
+ARG BUILD_DEPS="build-essential cmake pkg-config perl libclang-dev"
 
 ENV CARGO_TERM_COLOR=never \
     CARGO_NET_RETRY=5 \
@@ -94,8 +95,8 @@ ENV APP_HOST=0.0.0.0 \
 # `ffmpeg` ships the GPL build that also provides `ffprobe` (ADR-006: GPL build is
 # accepted, so software H.264 via libx264 is available). `libva2`/`vainfo` provide
 # the VA-API runtime and its diagnostic tool. `curl` exists only for HEALTHCHECK.
-# `ca-certificates` provides the CA store for the torrent engine's HTTPS client and
-# provider fetches (without it reqwest/native-tls cannot build its HTTP client).
+# `ca-certificates` provides the system CA store that reqwest/librqbit's rustls
+# (rustls-platform-verifier) reads for HTTPS to trackers and providers.
 # VA-API drivers: Intel iGPU (`intel-media-va-driver-non-free`, in `non-free`) and
 # AMD (`mesa-va-drivers`, radeonsi/VCN) — both for `HWACCEL_MODE=vaapi`.
 RUN sed -i 's/^Components: main$/Components: main non-free non-free-firmware/' \

@@ -23,7 +23,7 @@ serde_json = "1.0.154"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 tower-http = { version = "0.7.1", features = ["trace", "fs"] }
-librqbit = "9.0.1"
+librqbit = { version = "9.0.1", default-features = false, features = ["rust-tls"] }
 tokio-util = { version = "0.7", features = ["io"] }
 futures-util = "0.3"
 reqwest = { version = "0.13", features = ["gzip", "brotli"] }
