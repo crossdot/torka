@@ -63,10 +63,26 @@ jobs:
         run: npm run build
 
   docker:
-    name: Docker image build (x86_64)
+    name: Build & publish image (x86_64)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build image
-        run: docker build -t movie-streamer:ci .
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+          tags: |
+            ghcr.io/crossdot/torka:latest
+            ghcr.io/crossdot/torka:${{ github.sha }}
