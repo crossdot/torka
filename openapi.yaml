@@ -1,0 +1,541 @@
+openapi: 3.0.3
+info:
+  title: movie-streamer API
+  version: 0.1.0
+  description: |
+    Public HTTP contract for movie-streamer, transcribed from `API.md`.
+
+    General rules (API.md):
+    - API endpoints live under `/api/v1`; payloads are JSON UTF-8.
+    - Failures use the unified error shape `{"error":{"code","message","request_id"}}`.
+    - Stack traces, filesystem paths and secrets are never exposed.
+    - Access requires a bearer token; `/health` and `/ready` are public.
+    - Identification never relies on browser cookies; the `Host` header is not
+      trusted when building playback URLs.
+
+    HTTP status codes for individual error codes are not enumerated in
+    `API.md`; the mappings below are the conventional ones used by this contract.
+servers:
+  - url: /
+    description: Same origin as the backend (may be fronted by a reverse proxy).
+tags:
+  - name: Health
+    description: Liveness and readiness.
+  - name: Search
+    description: Normalized provider search.
+  - name: Sources
+    description: Opaque source information.
+  - name: Playback
+    description: Playback sessions and HLS delivery.
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      tags: [Health]
+      operationId: getHealth
+      summary: Liveness probe.
+      description: The process is up and able to serve requests.
+      security: []
+      responses:
+        "200":
+          description: Process is alive.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: ok
+                version: 0.1.0
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /ready:
+    get:
+      tags: [Health]
+      operationId: getReady
+      summary: Readiness probe.
+      description: |
+        Readiness of mandatory components. Does not depend on the availability
+        of all external sites.
+      security: []
+      responses:
+        "200":
+          description: Mandatory components are ready.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: ready
+                version: 0.1.0
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/search:
+    get:
+      tags: [Search]
+      operationId: search
+      summary: Search providers for normalized results.
+      description: |
+        Returns normalized results and the status of each provider. A failed
+        provider does not remove successful results from other providers.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Search query.
+          schema:
+            type: string
+            minLength: 1
+        - name: year
+          in: query
+          required: false
+          description: Optional year filter.
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Search results and per-provider status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/sources/{id}:
+    get:
+      tags: [Sources]
+      operationId: getSource
+      summary: Get information about an opaque source ID.
+      description: |
+        Returns details for an opaque source ID. `API.md` does not specify the
+        individual response fields, so this schema intentionally does not
+        assert any undocumented fields.
+      parameters:
+        - $ref: "#/components/parameters/SourceId"
+      responses:
+        "200":
+          description: Details for the opaque source ID.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SourceDetails"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/playback/sessions:
+    post:
+      tags: [Playback]
+      operationId: createPlaybackSession
+      summary: Create a playback session.
+      description: |
+        Creates a playback session for an opaque source. The response is
+        `202 Accepted`; the session continues resolving in the background and
+        is polled via `status_url`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePlaybackSessionRequest"
+            example:
+              source_id: opaque-id
+              file_id: null
+              preferred_mode: auto
+      responses:
+        "202":
+          description: Playback session accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaybackSession"
+              example:
+                session_id: opaque-session-id
+                status: resolving
+                status_url: /api/v1/playback/sessions/opaque-session-id
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/playback/sessions/{id}:
+    get:
+      tags: [Playback]
+      operationId: getPlaybackSession
+      summary: Get playback session status.
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "200":
+          description: Current playback session state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaybackSession"
+              example:
+                session_id: opaque-session-id
+                status: ready
+                status_url: /api/v1/playback/sessions/opaque-session-id
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      tags: [Playback]
+      operationId: deletePlaybackSession
+      summary: Stop and clean up a playback session.
+      description: |
+        Cancels pending jobs, terminates/reaps processes and clears the cache.
+        Repeated `DELETE` is safe (idempotent).
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "202":
+          description: Stop requested; the session releases resources asynchronously.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaybackSession"
+              example:
+                session_id: opaque-session-id
+                status: stopping
+                status_url: /api/v1/playback/sessions/opaque-session-id
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/playback/sessions/{id}/master.m3u8:
+    get:
+      tags: [Playback]
+      operationId: getHlsMasterPlaylist
+      summary: Get the HLS playlist for a session.
+      description: |
+        Returns the HLS master playlist bound to the session. Only served in
+        the context of a session; internal filesystem paths are never exposed.
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "200":
+          description: HLS playlist.
+          content:
+            application/vnd.apple.mpegurl:
+              schema:
+                type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/playback/sessions/{id}/segments/{segment}:
+    get:
+      tags: [Playback]
+      operationId: getHlsSegment
+      summary: Get an HLS segment bound to a session.
+      description: |
+        Returns an HLS segment belonging to the session. Segment identifiers are
+        stable within a session. The concrete media type depends on the selected
+        playback plan (e.g. MPEG-TS or fMP4).
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+        - name: segment
+          in: path
+          required: true
+          description: Segment identifier within the session.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: HLS segment bytes.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        Static bearer token (`APP_API_TOKEN`) required for all `/api/*` routes
+        and playback artifacts. `/health` and `/ready` are public. Never sent or
+        accepted via cookies.
+  parameters:
+    SourceId:
+      name: id
+      in: path
+      required: true
+      description: Opaque source ID.
+      schema:
+        type: string
+    SessionId:
+      name: id
+      in: path
+      required: true
+      description: Opaque playback session ID.
+      schema:
+        type: string
+  responses:
+    BadRequest:
+      description: Request validation failed (`VALIDATION_ERROR`).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: |
+        Missing or invalid bearer token. `API.md` defines no dedicated auth
+        error code, so this response may carry no JSON error envelope.
+    NotFound:
+      description: Resource not found (`NOT_FOUND`).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    TooManyRequests:
+      description: |
+        Rate or active-session limit reached (`SESSION_LIMIT_REACHED` or
+        `RESOURCE_LIMIT_EXCEEDED`).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    InternalError:
+      description: Unexpected server failure (`INTERNAL_ERROR`).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    ErrorCode:
+      type: string
+      description: Documented error code (API.md).
+      enum:
+        - VALIDATION_ERROR
+        - NOT_FOUND
+        - PROVIDER_TIMEOUT
+        - PROVIDER_UNAVAILABLE
+        - SOURCE_UNAVAILABLE
+        - SOURCE_TIMEOUT
+        - BUFFERING_TIMEOUT
+        - UNSUPPORTED_MEDIA
+        - PROBE_FAILED
+        - FFMPEG_FAILED
+        - HWACCEL_UNAVAILABLE
+        - RESOURCE_LIMIT_EXCEEDED
+        - SESSION_LIMIT_REACHED
+        - SESSION_EXPIRED
+        - CLEANUP_FAILED
+        - INTERNAL_ERROR
+    Error:
+      type: object
+      description: |
+        Unified error envelope. Must not reveal stack traces, filesystem paths,
+        secrets or internal details.
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code:
+              $ref: "#/components/schemas/ErrorCode"
+            message:
+              type: string
+              description: Safe, human-readable message.
+            request_id:
+              type: string
+              description: Correlation ID for the failed request.
+      example:
+        error:
+          code: VALIDATION_ERROR
+          message: Invalid request
+          request_id: "0000000000000001"
+    HealthResponse:
+      type: object
+      description: Liveness/readiness payload returned by both health endpoints.
+      required: [status, version]
+      properties:
+        status:
+          type: string
+          example: ok
+        version:
+          type: string
+          example: 0.1.0
+    SearchResultItem:
+      type: object
+      description: |
+        Normalized search result. Unknown values remain null; fields are not
+        invented for providers that do not supply them.
+      required:
+        - id
+        - title
+        - year
+        - provider_id
+        - size_bytes
+        - seeders
+        - leechers
+        - info_hash
+        - magnet_available
+        - quality
+        - languages
+        - source_url
+      properties:
+        id:
+          type: string
+          description: Opaque result ID; passed as `source_id` when creating a session.
+        title:
+          type: string
+        year:
+          type: integer
+          nullable: true
+        provider_id:
+          type: string
+        size_bytes:
+          type: integer
+          format: int64
+          nullable: true
+        seeders:
+          type: integer
+          nullable: true
+        leechers:
+          type: integer
+          nullable: true
+        info_hash:
+          type: string
+          nullable: true
+        magnet_available:
+          type: boolean
+        quality:
+          type: string
+          nullable: true
+        languages:
+          type: array
+          items:
+            type: string
+        source_url:
+          type: string
+          nullable: true
+    ProviderStatus:
+      type: object
+      description: Per-provider search status.
+      required: [id, status, duration_ms, error_code]
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          description: Provider status for this search.
+          example: ok
+        duration_ms:
+          type: integer
+        error_code:
+          type: string
+          nullable: true
+          description: Documented error code when the provider failed; null otherwise.
+          enum:
+            - VALIDATION_ERROR
+            - NOT_FOUND
+            - PROVIDER_TIMEOUT
+            - PROVIDER_UNAVAILABLE
+            - SOURCE_UNAVAILABLE
+            - SOURCE_TIMEOUT
+            - BUFFERING_TIMEOUT
+            - UNSUPPORTED_MEDIA
+            - PROBE_FAILED
+            - FFMPEG_FAILED
+            - HWACCEL_UNAVAILABLE
+            - RESOURCE_LIMIT_EXCEEDED
+            - SESSION_LIMIT_REACHED
+            - SESSION_EXPIRED
+            - CLEANUP_FAILED
+            - INTERNAL_ERROR
+    SearchResponse:
+      type: object
+      required: [items, providers]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchResultItem"
+        providers:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProviderStatus"
+    SourceDetails:
+      type: object
+      description: |
+        Details for an opaque source ID. API.md specifies only that the response
+        carries source information and does not define individual fields; the
+        object is intentionally open and no undocumented fields are asserted.
+      additionalProperties: true
+    SessionState:
+      type: string
+      description: Playback session state (API.md).
+      enum:
+        - created
+        - resolving
+        - buffering
+        - ready
+        - playing
+        - stopping
+        - stopped
+        - failed
+        - expired
+    PlaybackSession:
+      type: object
+      description: Playback session reference and current status.
+      required: [session_id, status, status_url]
+      properties:
+        session_id:
+          type: string
+        status:
+          $ref: "#/components/schemas/SessionState"
+        status_url:
+          type: string
+          description: |
+            URL for polling session status; identical to
+            `GET /api/v1/playback/sessions/{id}`.
+    CreatePlaybackSessionRequest:
+      type: object
+      required: [source_id]
+      properties:
+        source_id:
+          type: string
+          description: Opaque source ID.
+        file_id:
+          type: string
+          nullable: true
+          description: Opaque selected file ID; null when not selected/unknown.
+        preferred_mode:
+          type: string
+          description: |
+            Preferred playback mode (for example `auto`). The backend may choose
+            a different mode based on media inspection.
+          example: auto

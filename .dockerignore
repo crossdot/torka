@@ -1,0 +1,10 @@
+# Keep the build context small; the Dockerfile only needs the manifests and `src/`.
+target/
+.git/
+.gitignore
+.env
+*.log
+cache/
+node_modules/
+frontend/node_modules/
+frontend/dist/
