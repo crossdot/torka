@@ -13,17 +13,37 @@ librqbit; один Docker-контейнер для Synology и любого Lin
 - Vendor-agnostic аппаратное ускорение (Intel/AMD VA-API, NVIDIA NVENC) + software fallback.
 - Единый клиент-независимый API (`/api/v1`) + Vue-UI.
 
-## Быстрый старт
+## Быстрый старт (опубликованный образ)
+
+Образ публикуется в GitHub Container Registry: `ghcr.io/crossdot/torka`
+(теги `latest`, `<git-sha>`, semver из git-тегов — напр. `0.1.0`).
 
 ```bash
-cp ENV.example .env      # задайте APP_API_TOKEN
+cp ENV.example .env                # задайте APP_API_TOKEN
 install -d -o 10001 -g 10001 ./cache
-docker compose up -d --build
+
+docker run -d --name torka --init --restart unless-stopped \
+  -p 8080:8080 \
+  --env-file .env \
+  -v "$(pwd)/cache:/cache" \
+  ghcr.io/crossdot/torka:latest
 # http://localhost:8080
 ```
 
-Подробная инструкция (в т.ч. Synology Container Manager, VA-API, upgrade) — в
+Если пакет GHCR приватный — сначала `docker login ghcr.io` (токен с `read:packages`).
+
+Подробная инструкция (Synology Container Manager, VA-API, auth, upgrade) — в
 [`DEPLOYMENT.md`](DEPLOYMENT.md).
+
+## Локальная сборка образа
+
+Если нужен образ из исходников (без GHCR):
+
+```bash
+docker compose up -d --build
+```
+
+`compose.yaml` собирает `Dockerfile` (x86_64); для arm64 — `Dockerfile.arm64`.
 
 ## Разработка
 

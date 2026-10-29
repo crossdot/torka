@@ -11,6 +11,8 @@
 
 ## Быстрый старт (Compose)
 
+Готовый образ из GHCR (вместо локальной сборки) — см. `README.md`.
+
 ```bash
 cp ENV.example .env
 # отредактируйте .env — обязательно задайте APP_API_TOKEN
