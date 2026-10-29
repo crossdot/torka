@@ -3,21 +3,29 @@ pub mod v1;
 
 use std::path::Path;
 
-use axum::{Router, routing::get};
+use axum::{Router, middleware, routing::get};
 use tower_http::{
     services::{ServeDir, ServeFile},
     trace::TraceLayer,
 };
 
-use crate::state::AppState;
+use crate::{auth, state::AppState};
 
 /// Builds the application router. `AppState` is the shared state (Clone + Send + Sync).
 pub fn router(state: AppState) -> Router {
+    let api_token = state.config.api_token.clone();
     let spa = spa(&state.config.static_dir);
+
     Router::new()
         .route("/health", get(health::health))
         .route("/ready", get(health::ready))
-        .nest("/api/v1", v1::router())
+        .nest(
+            "/api/v1",
+            v1::router().layer(middleware::from_fn_with_state(
+                api_token,
+                auth::require_auth,
+            )),
+        )
         .fallback_service(spa)
         .layer(TraceLayer::new_for_http())
         .with_state(state)

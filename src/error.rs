@@ -36,6 +36,7 @@ struct ApiErrorInner {
 pub enum AppError {
     Validation(String),
     NotFound(String),
+    Unauthorized(String),
     Internal(String),
 }
 
@@ -48,6 +49,10 @@ impl AppError {
         Self::NotFound(msg.into())
     }
 
+    pub fn unauthorized(msg: impl Into<String>) -> Self {
+        Self::Unauthorized(msg.into())
+    }
+
     pub fn internal(msg: impl Into<String>) -> Self {
         Self::Internal(msg.into())
     }
@@ -56,7 +61,9 @@ impl AppError {
 impl std::fmt::Display for AppError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Validation(m) | Self::NotFound(m) | Self::Internal(m) => f.write_str(m),
+            Self::Validation(m) | Self::NotFound(m) | Self::Unauthorized(m) | Self::Internal(m) => {
+                f.write_str(m)
+            }
         }
     }
 }
@@ -68,6 +75,7 @@ impl IntoResponse for AppError {
         let (code, status, message) = match self {
             Self::Validation(m) => ("VALIDATION_ERROR", StatusCode::BAD_REQUEST, m),
             Self::NotFound(m) => ("NOT_FOUND", StatusCode::NOT_FOUND, m),
+            Self::Unauthorized(m) => ("UNAUTHORIZED", StatusCode::UNAUTHORIZED, m),
             Self::Internal(m) => ("INTERNAL_ERROR", StatusCode::INTERNAL_SERVER_ERROR, m),
         };
 

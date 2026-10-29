@@ -21,6 +21,7 @@ pub struct StreamingManager {
     session_dir: PathBuf,
     limit: Arc<Semaphore>,
     ready_timeout: Duration,
+    resolve_timeout: Duration,
     ffmpeg_path: String,
 }
 
@@ -35,6 +36,7 @@ impl StreamingManager {
             session_dir: PathBuf::from(&config.session_dir),
             limit: Arc::new(Semaphore::new(config.max_active_sessions.max(1))),
             ready_timeout: Duration::from_secs(config.ffmpeg_start_timeout_secs),
+            resolve_timeout: Duration::from_secs(config.torrent_resolve_timeout_secs),
             ffmpeg_path: config.ffmpeg_path.clone(),
         })
     }
@@ -73,6 +75,7 @@ impl StreamingManager {
             source: self.source.clone(),
             ffmpeg_path: self.ffmpeg_path.clone(),
             ready_timeout: self.ready_timeout,
+            resolve_timeout: self.resolve_timeout,
         };
 
         tokio::spawn(async move {

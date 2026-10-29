@@ -93,6 +93,7 @@ pub struct SessionEnv {
     pub source: Arc<SourceServer>,
     pub ffmpeg_path: String,
     pub ready_timeout: Duration,
+    pub resolve_timeout: Duration,
 }
 
 /// Runs the session to completion (ready then stop), or to failure/cancel.
@@ -132,10 +133,16 @@ async fn orchestrate(
     env: &SessionEnv,
     token: &mut Option<String>,
 ) -> Result<(), AppError> {
-    // Resolve torrent metadata.
+    // Resolve torrent metadata (bounded by the resolve timeout).
     session.set_state(SessionState::Resolving).await;
     let handle = tokio::select! {
-        r = env.engine.add(source, output_folder) => r?,
+        r = tokio::time::timeout(env.resolve_timeout, env.engine.add(source, output_folder)) => {
+            match r {
+                Ok(Ok(handle)) => handle,
+                Ok(Err(e)) => return Err(e),
+                Err(_) => return Err(AppError::internal("torrent metadata resolve timed out")),
+            }
+        }
         _ = session.cancel.cancelled() => return Ok(()),
     };
 

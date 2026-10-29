@@ -154,4 +154,47 @@ mod tests {
         assert_eq!(status, StatusCode::NOT_FOUND);
         assert_eq!(json["error"]["code"], "NOT_FOUND");
     }
+
+    #[tokio::test]
+    async fn auth_enforced_when_token_configured() {
+        let config = Config {
+            cache_dir: "/tmp/torka-test-cache".into(),
+            session_dir: "/tmp/torka-test-sessions".into(),
+            api_token: Some("secret".into()),
+            ..Config::default()
+        };
+        let registry =
+            ProviderRegistry::default().with_provider(AnyProvider::Fake(FakeProvider::new("fake")));
+        let search = Arc::new(SearchService::new(registry, Duration::from_secs(5), 4));
+        let cache = Arc::new(SearchCache::new(Duration::from_secs(60), 100));
+        let streaming = Arc::new(StreamingManager::new(&config).await.unwrap());
+        let app = crate::api::router(AppState {
+            config,
+            search,
+            cache,
+            streaming,
+        });
+
+        let req = Request::builder()
+            .uri("/api/v1/diagnostics")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+
+        let req = Request::builder()
+            .uri("/api/v1/diagnostics")
+            .header("authorization", "Bearer secret")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let req = Request::builder()
+            .uri("/health")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
 }
