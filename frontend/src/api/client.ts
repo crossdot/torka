@@ -44,6 +44,10 @@ export interface RequestOptions {
   signal?: AbortSignal;
   /** Set to `false` for public endpoints (`/health`, `/ready`). */
   auth?: boolean;
+  /** HTTP method; defaults to `GET`. */
+  method?: string;
+  /** JSON body for non-GET requests. */
+  body?: unknown;
 }
 
 function buildUrl(url: string, query?: Record<string, QueryValue>): string {
@@ -96,11 +100,16 @@ export async function requestJson<T>(url: string, options: RequestOptions = {}):
     headers.set('Authorization', `Bearer ${API_TOKEN}`);
   }
 
+  if (options.body !== undefined) {
+    headers.set('Content-Type', 'application/json');
+  }
+
   let response: Response;
   try {
     response = await fetch(buildUrl(url, options.query), {
-      method: 'GET',
+      method: options.method ?? 'GET',
       headers,
+      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
       // Bearer auth only: no cookies are sent or relied on (API.md).
       credentials: 'omit',
       cache: 'no-store',
@@ -134,10 +143,8 @@ export async function requestJson<T>(url: string, options: RequestOptions = {}):
   }
 
   if (body === null) {
-    throw new ApiError('INVALID_RESPONSE', 'API вернул пустой или некорректный JSON.', {
-      status: response.status,
-      requestId: headerRequestId,
-    });
+    // Empty success body (e.g., 202 on DELETE) — nothing to return.
+    return undefined as T;
   }
 
   return body as T;

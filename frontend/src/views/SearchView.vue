@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useRouter } from 'vue-router';
 
 import { hasApiToken } from '@/api/config';
 import ProviderStatusList from '@/components/ProviderStatusList.vue';
 import ResultCard from '@/components/ResultCard.vue';
 import SearchForm from '@/components/SearchForm.vue';
 import { useSearch } from '@/composables/useSearch';
+import type { SearchItem } from '@/types';
+
+const router = useRouter();
 
 const { state, failedProviders, hasProviderFailures, run, retry } = useSearch();
 
@@ -19,6 +23,10 @@ const failedProviderIds = computed(() =>
 
 function onSubmit(payload: { q: string; year: number | null }): void {
   void run(payload);
+}
+
+function onSelect(item: SearchItem): void {
+  void router.push({ name: 'player', params: { sourceId: item.id } });
 }
 </script>
 
@@ -90,7 +98,7 @@ function onSubmit(payload: { q: string; year: number | null }): void {
           <p class="results__count">Найдено: {{ state.items.length }}</p>
           <ul class="result-grid">
             <li v-for="item in state.items" :key="item.id">
-              <ResultCard :item="item" />
+              <ResultCard :item="item" @select="onSelect" />
             </li>
           </ul>
         </template>

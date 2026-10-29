@@ -572,3 +572,11 @@ a {
   text-align: right;
   overflow-wrap: anywhere;
 }
+
+.player {
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border-radius: var(--radius);
+}

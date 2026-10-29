@@ -16,6 +16,11 @@ const router = createRouter({
       component: () => import('@/views/DiagnosticsView.vue'),
     },
     {
+      path: '/play/:sourceId',
+      name: 'player',
+      component: () => import('@/views/PlayerView.vue'),
+    },
+    {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
       component: () => import('@/views/NotFoundView.vue'),

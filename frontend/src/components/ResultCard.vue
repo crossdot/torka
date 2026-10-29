@@ -4,8 +4,11 @@ import { computed, useId } from 'vue';
 import type { SearchItem } from '@/types';
 
 const props = defineProps<{ item: SearchItem }>();
+const emit = defineEmits<{ select: [item: SearchItem] }>();
 
 const hintId = `result-hint-${useId()}`;
+
+const playable = computed(() => props.item.info_hash !== null);
 
 const year = computed(() => (typeof props.item.year === 'number' ? props.item.year : null));
 
@@ -73,8 +76,18 @@ const leechers = computed(() =>
     </p>
 
     <footer class="card__footer">
-      <button class="button" type="button" disabled :aria-describedby="hintId">Выбрать</button>
-      <span :id="hintId" class="card__hint">Выбор источника появится вместе с playback API.</span>
+      <button
+        class="button button--primary"
+        type="button"
+        :disabled="!playable"
+        :aria-describedby="hintId"
+        @click="emit('select', item)"
+      >
+        Выбрать
+      </button>
+      <span v-if="!playable" :id="hintId" class="card__hint"
+        >Нет источника для воспроизведения.</span
+      >
     </footer>
   </article>
 </template>
