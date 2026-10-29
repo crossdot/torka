@@ -4,3 +4,4 @@ pub mod error;
 pub mod providers;
 pub mod search;
 pub mod state;
+pub mod streaming;
