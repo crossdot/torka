@@ -38,6 +38,7 @@ let pollTimer: ReturnType<typeof setTimeout> | null = null;
 let stopped = false;
 let seeking = false;
 let dragging = false;
+let hlsWindowSecs = 0;
 
 function setupHls(url: string): void {
   const el = video.value;
@@ -115,10 +116,12 @@ function onSeekChange(e: Event): void {
   if (el === null || sessionId === null || !Number.isFinite(target)) {
     return;
   }
-  // Seekable without restart is the buffered range [start, end] in the current
-  // stream. Anything outside (forward or backward, e.g. past the HLS window)
-  // needs a pipeline restart.
-  const absStart = seekBase.value + bufferedStart();
+  // Seekable without restart is the HLS window on disk (the last
+  // `hls_window_secs` of produced segments); anything outside it (forward, or
+  // backward before the window) needs a pipeline restart.
+  const windowStart =
+    hlsWindowSecs > 0 ? Math.max(0, bufferedEnd() - hlsWindowSecs) : bufferedStart();
+  const absStart = seekBase.value + windowStart;
   const absEnd = seekBase.value + bufferedEnd();
   if (target > absEnd + 1 || target < absStart) {
     void seekRemote(target);
@@ -177,6 +180,7 @@ async function poll(): Promise<void> {
     const s = await getPlaybackStatus(sessionId);
     if (s.status === 'ready' || s.status === 'playing') {
       durationSecs.value = s.duration_secs ?? null;
+      hlsWindowSecs = s.hls_window_secs ?? 0;
       play(playlistUrl(sessionId));
       return;
     }
