@@ -10,4 +10,5 @@ export interface PlaybackStatus {
   readonly status: string;
   readonly error?: string | null;
   readonly duration_secs?: number | null;
+  readonly hls_window_secs?: number;
 }

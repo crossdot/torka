@@ -38,6 +38,8 @@ struct SessionStatusResponse {
     status: String,
     error: Option<String>,
     duration_secs: Option<f64>,
+    /// HLS sliding window (seconds kept on disk) — bounds the native seek range.
+    hls_window_secs: u64,
 }
 
 pub fn router() -> Router<AppState> {
@@ -91,6 +93,7 @@ async fn status(
         status: status.as_str().to_string(),
         error,
         duration_secs,
+        hls_window_secs: state.config.hls_window_secs,
     }))
 }
 

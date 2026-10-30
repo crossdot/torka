@@ -38,6 +38,7 @@ let pollTimer: ReturnType<typeof setTimeout> | null = null;
 let stopped = false;
 let seeking = false;
 let dragging = false;
+let hlsWindowSecs = 0;
 
 function setupHls(url: string): void {
   const el = video.value;
@@ -61,24 +62,6 @@ function setupHls(url: string): void {
   } else {
     error.value = 'Этот браузер не поддерживает HLS.';
   }
-}
-
-function bufferedEnd(): number {
-  const el = video.value;
-  if (el === null) {
-    return 0;
-  }
-  const b = el.buffered;
-  return b.length > 0 ? b.end(b.length - 1) : 0;
-}
-
-function bufferedStart(): number {
-  const el = video.value;
-  if (el === null) {
-    return 0;
-  }
-  const b = el.buffered;
-  return b.length > 0 ? b.start(0) : 0;
 }
 
 /** Restart the pipeline at `positionSecs`, then reload the stream from there. */
@@ -115,12 +98,12 @@ function onSeekChange(e: Event): void {
   if (el === null || sessionId === null || !Number.isFinite(target)) {
     return;
   }
-  // Seekable without restart is the buffered range [start, end] in the current
-  // stream. Anything outside (forward or backward, e.g. past the HLS window)
-  // needs a pipeline restart.
-  const absStart = seekBase.value + bufferedStart();
-  const absEnd = seekBase.value + bufferedEnd();
-  if (target > absEnd + 1 || target < absStart) {
+  // Live (sliding) HLS: the playhead tracks the FFmpeg production edge, so the
+  // native seek range is [playhead - HLS window, playhead + small margin].
+  // Anything outside it (forward, or backward before the window) restarts.
+  const absPos = seekBase.value + currentTime.value;
+  const absStart = seekBase.value + Math.max(0, currentTime.value - hlsWindowSecs);
+  if (target > absPos + 3 || target < absStart) {
     void seekRemote(target);
   } else {
     el.currentTime = Math.max(0, target - seekBase.value);
@@ -177,6 +160,7 @@ async function poll(): Promise<void> {
     const s = await getPlaybackStatus(sessionId);
     if (s.status === 'ready' || s.status === 'playing') {
       durationSecs.value = s.duration_secs ?? null;
+      hlsWindowSecs = s.hls_window_secs ?? 0;
       play(playlistUrl(sessionId));
       return;
     }
