@@ -64,24 +64,6 @@ function setupHls(url: string): void {
   }
 }
 
-function bufferedEnd(): number {
-  const el = video.value;
-  if (el === null) {
-    return 0;
-  }
-  const b = el.buffered;
-  return b.length > 0 ? b.end(b.length - 1) : 0;
-}
-
-function bufferedStart(): number {
-  const el = video.value;
-  if (el === null) {
-    return 0;
-  }
-  const b = el.buffered;
-  return b.length > 0 ? b.start(0) : 0;
-}
-
 /** Restart the pipeline at `positionSecs`, then reload the stream from there. */
 async function seekRemote(positionSecs: number): Promise<void> {
   if (sessionId === null || seeking) {
@@ -116,14 +98,12 @@ function onSeekChange(e: Event): void {
   if (el === null || sessionId === null || !Number.isFinite(target)) {
     return;
   }
-  // Seekable without restart is the HLS window on disk (the last
-  // `hls_window_secs` of produced segments); anything outside it (forward, or
-  // backward before the window) needs a pipeline restart.
-  const windowStart =
-    hlsWindowSecs > 0 ? Math.max(0, bufferedEnd() - hlsWindowSecs) : bufferedStart();
-  const absStart = seekBase.value + windowStart;
-  const absEnd = seekBase.value + bufferedEnd();
-  if (target > absEnd + 1 || target < absStart) {
+  // Live (sliding) HLS: the playhead tracks the FFmpeg production edge, so the
+  // native seek range is [playhead - HLS window, playhead + small margin].
+  // Anything outside it (forward, or backward before the window) restarts.
+  const absPos = seekBase.value + currentTime.value;
+  const absStart = seekBase.value + Math.max(0, currentTime.value - hlsWindowSecs);
+  if (target > absPos + 3 || target < absStart) {
     void seekRemote(target);
   } else {
     el.currentTime = Math.max(0, target - seekBase.value);
